@@ -23,11 +23,10 @@ import (
 )
 
 const (
-	globalOffset = 0.00
-	startDelay   = 3000 * time.Millisecond
-
-	flashLength   = 60
-	speed         = 12
+	globalOffset  = 0.00
+	startDelay    = 3000 * time.Millisecond
+	flashLength   = 60 //
+	speed         = 12 // lower is faster
 	bottomPadding = 8
 	mineSym       = "⨯"
 	framePeriod   = 4166666 * time.Nanosecond
@@ -57,10 +56,10 @@ var judgementNames = [8]string{
 
 // syms := [4]string{"⇦", "⇧", "⇩", "⇨"}
 var syms = [4]string{
-	"⬤\033[0m",
-	"⬤\033[0m",
-	"⬤\033[0m",
-	"⬤\033[0m",
+	"⬤",
+	"⬤",
+	"⬤",
+	"⬤",
 }
 
 var keys = [4]string{
@@ -68,25 +67,25 @@ var keys = [4]string{
 }
 
 var noteColors = map[int]string{
-	1:  "\033[1;31m",     // 1/4 red
-	2:  "\033[1;36m",     // 1/8 cyan
-	3:  "\033[1;32m",     // 1/12 green
-	4:  "\033[1;33m",     // 1/16 yellow
-	5:  "\033[38;5;254m", // 1/20 grey???
-	6:  "\033[1;35m",     // 1/24 purple
-	8:  "\033[38;5;208m", // 1/32 orange
-	12: "\033[1;36m",     // 1/48 cyan
-	16: "\033[1;32m",     // 1/64 green
-	24: "\033[1;32m",     // 1/96 green
-	32: "\033[38;5;153m", // 1/128 pastle blue
-	48: "\033[38;5;107m", // 1/192 olive
-	64: "\033[38;5;130m", // 1/256 brown
+	1:  "\033[38;2;236;30;0m",    // 1/4 red
+	2:  "\033[38;2;0;118;236m",   // 1/8 blue
+	3:  "\033[38;2;106;0;236m",   // 1/12 purple
+	4:  "\033[38;2;236;195;0m",   // 1/16 yellow
+	5:  "\033[38;2;106;106;106m", // 1/20 grey???
+	6:  "\033[38;2;236;0;106m",   // 1/24 pink
+	8:  "\033[38;2;236;128;0m",   // 1/32 orange
+	12: "\033[38;2;173;236;236m", // 1/48 light blue
+	16: "\033[38;2;0;236;128m",   // 1/64 green
+	24: "\033[38;2;106;106;106m", // 1/96 grey
+	32: "\033[38;2;106;106;106m", // 1/128 grey
+	48: "\033[38;2;110;147;89m",  // 1/192 olive
+	64: "\033[38;2;106;106;106m", // 1/256 grey
 }
 
 func getColor(d int64) string {
-	col := noteColors[int(d)]
-	if col == "" {
-		col = "\033[0m"
+	col, ok := noteColors[int(d)]
+	if !ok {
+		return "\033[0m"
 	}
 	return col
 }
@@ -101,23 +100,15 @@ var barSyms = [4]string{
 var song = flag.String("f", "", "path to dir containing mp3 & sm file")
 
 func fill(x, y int64, c string) string {
-	return fmt.Sprintf("\033[%d;%dH%v", y, x, c)
+	return fmt.Sprintf("\033[%d;%dH\033[0m%v\033[0m", y, x, c)
 }
 
 func fillColor(x, y int64, color, c string) string {
 	return fmt.Sprintf("\033[%d;%dH%v%v\033[0m", y, x, color, c)
 }
 
-func replace(x, y, p, q int64, c string) string {
-	return fmt.Sprintf("\033[%d;%dH \033[%d;%dH%v", y, x, q, p, c)
-}
-
-func bar(message string) string {
-	return fmt.Sprintf("\033[K\033[0;0H%v", message)
-}
-
 func side(line int, sc int64, message string) string {
-	return fmt.Sprintf("\033[%v;%vH%v", line, sc, message)
+	return fmt.Sprintf("\033[%v;%vH%v\033[0m", line, sc, message)
 }
 
 func main() {
@@ -127,15 +118,12 @@ func main() {
 }
 
 type Note struct {
-	col         int
-	row         int64
-	color       string
-	currentBeat float64
-	bpm         float64
-	length      float64
-	hit         bool
-	isMine      bool
-	miss        bool
+	col    int
+	row    int64
+	color  string
+	hit    bool
+	isMine bool
+	miss   bool
 	// A list of co-ords that need clearing when remaining tick == 1
 	missFlash          *map[string]Point
 	missFlashRemaining int
@@ -313,7 +301,7 @@ func parse(ch <-chan keyboard.KeyEvent, file string) (*Chart, error) {
 		lines := []string{}
 		bls := strings.Split(block, "\n")
 		for _, l := range bls {
-			if strings.HasPrefix(l, " ") {
+			if strings.HasPrefix(l, " ") || strings.Contains(l, "-") {
 				continue
 			}
 			l = strings.TrimSpace(l)
@@ -323,44 +311,35 @@ func parse(ch <-chan keyboard.KeyEvent, file string) (*Chart, error) {
 		}
 
 		// Beat count is 4 per block
-		beatsPerNote := 4.0 / float64(len(lines)) // 1/4, 1/8, 1/16, 1/24 etc
+		lineCount := int64(len(lines))
+		beatsPerNote := 4.0 / float64(lineCount) // 1/4, 1/8, 1/16, 1/24 etc
 
 		// for each note line in a block
 		for i, line := range lines {
 			chs := []byte(line)
-			r := big.NewRat(int64(i+1), int64(len(lines)))
+			r := big.NewRat(int64(i*4), lineCount)
 			denom := r.Denom().Int64()
-			// log.Printf("%v/%v = 1/%v", i+1, len(lines), denom)
 			bpm, secondsPerNote := getSecondsPerNote(bpms, currentBeat, beatsPerNote)
 
 			createNote := func(col int, c string) *Note {
+				log.Printf("(%v) %v/%v = %v%vth\033[0m", bpm, i, lineCount, getColor(denom), denom)
 				if c == "M" {
 					mineCount++
 				} else {
 					noteCount++
 				}
 				return &Note{
-					col:         col,
-					color:       getColor(denom),
-					currentBeat: currentBeat,
-					length:      secondsPerNote,
-					bpm:         bpm,
-					isMine:      c == "M",
-					ms:          int64(t * 1000),
+					col:    col,
+					color:  getColor(denom),
+					isMine: c == "M",
+					ms:     int64(t * 1000),
 				}
 			}
 
-			if mapToNote(chs[0]) {
-				notes = append(notes, createNote(0, string(chs[0])))
-			}
-			if mapToNote(chs[1]) {
-				notes = append(notes, createNote(1, string(chs[1])))
-			}
-			if mapToNote(chs[2]) {
-				notes = append(notes, createNote(2, string(chs[2])))
-			}
-			if mapToNote(chs[3]) {
-				notes = append(notes, createNote(3, string(chs[3])))
+			for i, c := range chs {
+				if mapToNote(c) {
+					notes = append(notes, createNote(i, string(c)))
+				}
 			}
 
 			t += secondsPerNote
