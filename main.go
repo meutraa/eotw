@@ -23,11 +23,13 @@ import (
 )
 
 const (
-	globalOffset  = 0.00
+	globalOffset = 0.00
+	startDelay   = 3000 * time.Millisecond
+
 	flashLength   = 60
 	speed         = 12
 	bottomPadding = 8
-	mineSym       = "╳"
+	mineSym       = "⨯"
 	framePeriod   = 4166666 * time.Nanosecond
 )
 
@@ -66,11 +68,11 @@ var keys = [4]string{
 }
 
 var noteColors = map[int]string{
-	1: "\033[1;31m", // 1/4 red
-	2: "\033[1;36m", // 1/8 cyan
-	3: "\033[1;32m", // 1/12 green
-	4: "\033[1;33m", // 1/16 yellow
-	// 1/20 grey???
+	1:  "\033[1;31m",     // 1/4 red
+	2:  "\033[1;36m",     // 1/8 cyan
+	3:  "\033[1;32m",     // 1/12 green
+	4:  "\033[1;33m",     // 1/16 yellow
+	5:  "\033[38;5;254m", // 1/20 grey???
 	6:  "\033[1;35m",     // 1/24 purple
 	8:  "\033[38;5;208m", // 1/32 orange
 	12: "\033[1;36m",     // 1/48 cyan
@@ -78,7 +80,7 @@ var noteColors = map[int]string{
 	24: "\033[1;32m",     // 1/96 green
 	32: "\033[38;5;153m", // 1/128 pastle blue
 	48: "\033[38;5;107m", // 1/192 olive
-	64: "\033[38;5;130",  // 1/256 brown
+	64: "\033[38;5;130m", // 1/256 brown
 }
 
 func getColor(d int64) string {
@@ -468,7 +470,6 @@ func run() error {
 	defer streamer.Close()
 
 	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/60))
-	speaker.Play(streamer)
 
 	// Clear the screen and hide the cursor
 	fmt.Printf("\033[?1049h\033[?25l\033[H\033[J")
@@ -477,7 +478,11 @@ func run() error {
 		fmt.Printf("\033[?1049l\033[?25h")
 	}()
 
-	startTime := time.Now()
+	go func() {
+		time.Sleep(startDelay)
+		speaker.Play(streamer)
+	}()
+	startTime := time.Now().Add(startDelay)
 	score := 0.0
 	counts := [8]int{0, 0, 0, 0, 0, 0, 0, 0}
 
