@@ -225,7 +225,8 @@ func parse(ch <-chan keyboard.KeyEvent, file string) (*Chart, error) {
 		return nil, err
 	}
 
-	sections := strings.Split(string(data), "#NOTES:")
+	str := strings.ReplaceAll(string(data), "\r", "")
+	sections := strings.Split(str, "#NOTES:")
 	meta := sections[0]
 	notesSection := ""
 	difficulties := []Difficulty{}
@@ -257,18 +258,19 @@ func parse(ch <-chan keyboard.KeyEvent, file string) (*Chart, error) {
 	offset := 0.0
 	bpms := []BPM{}
 
-	for _, mdl := range strings.Split(meta, "\n") {
+	for _, mdl := range strings.Split(meta, "\n#") {
 		mdl = strings.TrimSpace(mdl)
-		if strings.HasPrefix(mdl, "#OFFSET:") {
-			mdl = strings.TrimPrefix(mdl, "#OFFSET:")
+		if strings.HasPrefix(mdl, "OFFSET:") {
+			mdl = strings.TrimPrefix(mdl, "OFFSET:")
 			mdl = strings.TrimSuffix(mdl, ";")
 			offs, err := strconv.ParseFloat(mdl, 64)
 			if nil != err {
 				return nil, err
 			}
 			offset = -offs
-		} else if strings.HasPrefix(mdl, "#BPMS:") {
-			mdl = strings.TrimPrefix(mdl, "#BPMS:")
+		} else if strings.HasPrefix(mdl, "BPMS:") {
+			mdl = strings.TrimPrefix(mdl, "BPMS:")
+			mdl = strings.ReplaceAll(mdl, "\n", "")
 			bbs := strings.Split(strings.TrimSuffix(mdl, ";"), ",")
 			for _, bpm := range bbs {
 				as := strings.Split(bpm, "=")
@@ -287,6 +289,9 @@ func parse(ch <-chan keyboard.KeyEvent, file string) (*Chart, error) {
 			}
 		}
 	}
+
+	log.Println("Offset:", offset)
+	log.Println("BPMs:", bpmsoffset)
 
 	// Start time of first note
 	t := offset + globalOffset
