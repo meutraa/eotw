@@ -24,6 +24,7 @@ import (
 
 const (
 	globalOffset  = 0.00
+	missDistance  = 220
 	startDelay    = 3000 * time.Millisecond
 	flashLength   = 60 //
 	speed         = 12 // lower is faster
@@ -32,54 +33,40 @@ const (
 	framePeriod   = 4166666 * time.Nanosecond
 )
 
-var judgements = [8]float64{
-	6,
-	11,
-	22,
-	45,
-	90,
-	135,
-	180,
-	220,
-}
+var (
+	syms       = [4]string{"⬤", "⬤", "⬤", "⬤"}
+	keys       = [4]string{"_", "-", "m", "p"}
+	barSyms    = [4]string{"◯", "◯", "◯", "◯"}
+	judgements = []Judgement{
+		{0, 6, "      \033[1;31mE\033[38;5;208mx\033[1;33ma\033[1;32mc\033[38;5;153mt\033[0m"},
+		{1, 11, " \033[1;35mRidiculous\033[0m"},
+		{2, 22, "  \033[38;5;153mMarvelous\033[0m"},
+		{3, 45, "    \033[1;36mPerfect\033[0m"},
+		{4, 90, "      \033[1;32mGreat\033[0m"},
+		{5, 135, "       \033[1;33mGood\033[0m"},
+		{7, missDistance, "       \033[1;31mMiss\033[0m"},
+	}
+	noteColors = map[int]string{
+		1:  "\033[38;2;236;30;0m",    // 1/4 red
+		2:  "\033[38;2;0;118;236m",   // 1/8 blue
+		3:  "\033[38;2;106;0;236m",   // 1/12 purple
+		4:  "\033[38;2;236;195;0m",   // 1/16 yellow
+		5:  "\033[38;2;106;106;106m", // 1/20 grey???
+		6:  "\033[38;2;236;0;106m",   // 1/24 pink
+		8:  "\033[38;2;236;128;0m",   // 1/32 orange
+		12: "\033[38;2;173;236;236m", // 1/48 light blue
+		16: "\033[38;2;0;236;128m",   // 1/64 green
+		24: "\033[38;2;106;106;106m", // 1/96 grey
+		32: "\033[38;2;106;106;106m", // 1/128 grey
+		48: "\033[38;2;110;147;89m",  // 1/192 olive
+		64: "\033[38;2;106;106;106m", // 1/256 grey
+	}
+)
 
-var judgementNames = [8]string{
-	"      \033[1;31mE\033[38;5;208mx\033[1;33ma\033[1;32mc\033[38;5;153mt\033[0m",
-	" \033[1;35mRidiculous\033[0m",
-	"  \033[38;5;153mMarvelous\033[0m",
-	"    \033[1;36mPerfect\033[0m",
-	"      \033[1;32mGreat\033[0m",
-	"       \033[1;33mGood\033[0m",
-	"        \033[38;5;208mBoo\033[0m",
-	"       \033[1;31mMiss\033[0m",
-}
-
-// syms := [4]string{"⇦", "⇧", "⇩", "⇨"}
-var syms = [4]string{
-	"⬤",
-	"⬤",
-	"⬤",
-	"⬤",
-}
-
-var keys = [4]string{
-	"_", "-", "m", "p",
-}
-
-var noteColors = map[int]string{
-	1:  "\033[38;2;236;30;0m",    // 1/4 red
-	2:  "\033[38;2;0;118;236m",   // 1/8 blue
-	3:  "\033[38;2;106;0;236m",   // 1/12 purple
-	4:  "\033[38;2;236;195;0m",   // 1/16 yellow
-	5:  "\033[38;2;106;106;106m", // 1/20 grey???
-	6:  "\033[38;2;236;0;106m",   // 1/24 pink
-	8:  "\033[38;2;236;128;0m",   // 1/32 orange
-	12: "\033[38;2;173;236;236m", // 1/48 light blue
-	16: "\033[38;2;0;236;128m",   // 1/64 green
-	24: "\033[38;2;106;106;106m", // 1/96 grey
-	32: "\033[38;2;106;106;106m", // 1/128 grey
-	48: "\033[38;2;110;147;89m",  // 1/192 olive
-	64: "\033[38;2;106;106;106m", // 1/256 grey
+type Judgement struct {
+	index int
+	ms    float64
+	name  string
 }
 
 func getColor(d int64) string {
@@ -88,13 +75,6 @@ func getColor(d int64) string {
 		return "\033[0m"
 	}
 	return col
-}
-
-var barSyms = [4]string{
-	"◯",
-	"◯",
-	"◯",
-	"◯",
 }
 
 var song = flag.String("f", "", "path to dir containing mp3 & sm file")
@@ -291,7 +271,7 @@ func parse(ch <-chan keyboard.KeyEvent, file string) (*Chart, error) {
 	}
 
 	log.Println("Offset:", offset)
-	log.Println("BPMs:", bpmsoffset)
+	log.Println("BPMs:", bpms)
 
 	// Start time of first note
 	t := offset + globalOffset
@@ -375,13 +355,13 @@ func mapToNote(ch byte) bool {
 }
 
 // Returns an index of the judgement array
-func judge(d float64) int {
-	for i, judge := range judgements {
-		if d < judge {
-			return i
+func judge(d float64) Judgement {
+	for _, judgement := range judgements {
+		if d < judgement.ms {
+			return judgement
 		}
 	}
-	return 7
+	return judgements[len(judgements)-1]
 }
 
 func run() error {
@@ -468,7 +448,7 @@ func run() error {
 	}()
 	startTime := time.Now().Add(startDelay)
 	score := 0.0
-	counts := [8]int{0, 0, 0, 0, 0, 0, 0, 0}
+	counts := make([]int, len(judgements))
 
 	// stdev
 	sumOfDistance := 0.0
@@ -516,12 +496,12 @@ func run() error {
 					break
 				}
 			}
-			if nil != closestNote && distance < judgements[len(judgements)-1] {
+			if nil != closestNote && distance < missDistance {
 				score += distance
 				totalHits += 1
 				sumOfDistance += dirDistance
 				judgement := judge(distance)
-				counts[judgement] = counts[judgement] + 1
+				counts[judgement.index]++
 				closestNote.hitTime = currentDuration.Milliseconds()
 				closestNote.hit = true
 				if totalHits > 2 {
@@ -564,8 +544,8 @@ func run() error {
 		str += side(12, sideCol, fmt.Sprintf("       Mean:  %6.2f", mean))
 		str += side(13, sideCol, fmt.Sprintf("      Total:  %6v", chart.noteCount))
 		str += side(14, sideCol, fmt.Sprintf("      Mines:  %6v", chart.mineCount))
-		for i, count := range counts {
-			str += side(18+i, sideCol, fmt.Sprintf("%v:  %6v", judgementNames[i], count))
+		for i, judgement := range judgements {
+			str += side(18+i, sideCol, fmt.Sprintf("%v:  %6v", judgement.name, counts[i]))
 		}
 		fmt.Print(str)
 
