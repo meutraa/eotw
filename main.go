@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"git.lost.host/meutraa/eott/internal/game"
-	"git.lost.host/meutraa/eott/internal/graphics"
 	"git.lost.host/meutraa/eott/internal/parser"
 	"git.lost.host/meutraa/eott/internal/render"
 	"git.lost.host/meutraa/eott/internal/theme"
@@ -30,7 +29,6 @@ const (
 	frameRate    = 240
 	missDistance = barRow * speed // I count off the screen as missed
 	startDelay   = 3000 * time.Millisecond
-	flashLength  = 60 // error flash length ms
 	nKey         = 4
 	// If the note is 300ms away, base distance is 300 rows, this divides that
 	speed         = 1000 / frameRate * 3
@@ -214,7 +212,6 @@ func run() error {
 				}
 				dd := getDistance(note, duration)
 				d := math.Abs(float64(dd))
-				// log.Printf("hiiiiiit %v %v = %v", note.ms, currentDuration.Milliseconds(), dd)
 				if d < distance {
 					dirDistance = float64(dd)
 					distance = d
@@ -263,15 +260,6 @@ func run() error {
 			if isRowInField(rc, note.Row, false) {
 				r.Fill(note.Row, col, " ")
 			}
-			if note.MissFlashRemaining > 1 {
-				note.MissFlashRemaining--
-			} else if note.MissFlashRemaining == 1 {
-				note.MissFlashRemaining--
-				// clear flash
-				for _, note := range *note.MissFlash {
-					r.Fill(note.Row, note.Column, " ")
-				}
-			} // else 0 and does not exist anymore
 
 			// Calculate the new row based on time
 			nr := (rc - barRow)
@@ -282,18 +270,11 @@ func run() error {
 			if !note.Miss && note.Row > rc && !note.Hit && !note.IsMine {
 				miss = 1
 				note.Miss = true
-				// flash the miss
-				note.MissFlashRemaining = flashLength
 				cen := rc >> 1
-				note.MissFlash = &map[string]graphics.Point{
-					"╭": {col - 1, cen - 1},
-					"╮": {col + 1, cen - 1},
-					"╰": {col - 1, cen},
-					"╯": {col + 1, cen},
-				}
-				for c, p := range *note.MissFlash {
-					r.Fill(p.Row, p.Column, "\033[1;31m"+c)
-				}
+				r.AddDecoration(col-1, cen-1, "\033[1;31m╭", 240)
+				r.AddDecoration(col+1, cen-1, "\033[1;31m╮", 240)
+				r.AddDecoration(col-1, cen, "\033[1;31m╰", 240)
+				r.AddDecoration(col+1, cen, "\033[1;31m╯", 240)
 			} else if isRowInField(rc, note.Row, note.Hit) {
 				if note.IsMine {
 					r.Fill(note.Row, col, th.RenderMine(note.Index, note.Denom))
@@ -317,7 +298,6 @@ func run() error {
 		for i, judgement := range judgements {
 			r.Fill(int64(18+i), sideCol, fmt.Sprintf("%v:  %6v", judgement.Name, counts[i]))
 		}
-		r.Flush()
 
 		return true
 	})
