@@ -25,28 +25,27 @@ import (
 const (
 	globalOffset = 0.00
 	frameRate    = 240
-	missDistance = 220
+	missDistance = barRow * speed // I count off the screen as missed
 	startDelay   = 3000 * time.Millisecond
 	flashLength  = 60 // error flash length ms
 	// If the note is 300ms away, base distance is 300 rows, this divides that
-	speed         = 1000 / frameRate * 3
-	bottomPadding = 8
-	mineSym       = "⨯"
-	framePeriod   = 1 * time.Millisecond // game loop/render deadline
+	speed       = 1000 / frameRate * 3
+	barRow      = 8 // from the bottom of the screen
+	mineSym     = "⨯"
+	framePeriod = 1 * time.Millisecond // game loop/render deadline
 )
 
 var (
-	syms       = [4]string{"⬤", "⬤", "⬤", "⬤"}
-	keys       = [4]string{"_", "-", "m", "p"}
-	barSyms    = [4]string{"◯", "◯", "◯", "◯"}
+	syms       = [...]string{"⬤", "⬤", "⬤", "⬤"}
+	keys       = [...]string{"_", "-", "m", "p"}
+	barSyms    = [...]string{"-", "-", "-", "-"}
 	judgements = []Judgement{
-		{0, 6, "      \033[1;31mE\033[38;5;208mx\033[1;33ma\033[1;32mc\033[38;5;153mt\033[0m"},
-		{1, 11, " \033[1;35mRidiculous\033[0m"},
-		{2, 22, "  \033[38;5;153mMarvelous\033[0m"},
-		{3, 45, "    \033[1;36mPerfect\033[0m"},
-		{4, 90, "      \033[1;32mGreat\033[0m"},
-		{5, 135, "       \033[1;33mGood\033[0m"},
-		{6, missDistance, "       \033[1;31mMiss\033[0m"},
+		{0, 5, "      \033[1;31mE\033[38;5;208mx\033[1;33ma\033[1;32mc\033[38;5;153mt\033[0m"},
+		{1, 10, " \033[1;35mRidiculous\033[0m"},
+		{2, 20, "  \033[38;5;153mMarvelous\033[0m"},
+		{3, 40, "      \033[1;36mGreat\033[0m"},
+		{4, 60, "       \033[1;32mOkay\033[0m"},
+		{5, missDistance, "       \033[1;31mMiss\033[0m"},
 	}
 	noteColors = map[int]string{
 		1:  "\033[38;2;236;30;0m",    // 1/4 red
@@ -138,7 +137,7 @@ func (note *Note) step(now time.Time, currentDuration time.Duration, cis *[4]int
 	} // else 0 and does not exist anymore
 
 	// Calculate the new row based on time
-	nr := (rc - bottomPadding)
+	nr := (rc - barRow)
 	distance := int64(math.Round(float64((note.ms - currentDuration.Milliseconds())) / float64(speed)))
 	note.row = nr - distance
 
@@ -525,7 +524,7 @@ func run() error {
 
 		// Render the hit bar
 		for i, sym := range barSyms {
-			str += fill(cis[i], int64(rc)-bottomPadding, sym)
+			str += fill(cis[i], int64(rc)-barRow, sym)
 		}
 
 		// Render notes
