@@ -26,11 +26,11 @@ const (
 	globalOffset  = 0.00
 	missDistance  = 220
 	startDelay    = 3000 * time.Millisecond
-	flashLength   = 60 //
+	flashLength   = 60 // error flash length ms
 	speed         = 12 // lower is faster
 	bottomPadding = 8
 	mineSym       = "⨯"
-	framePeriod   = 4166666 * time.Nanosecond
+	framePeriod   = 1 * time.Millisecond // game loop/render deadline
 )
 
 var (
@@ -44,7 +44,7 @@ var (
 		{3, 45, "    \033[1;36mPerfect\033[0m"},
 		{4, 90, "      \033[1;32mGreat\033[0m"},
 		{5, 135, "       \033[1;33mGood\033[0m"},
-		{7, missDistance, "       \033[1;31mMiss\033[0m"},
+		{6, missDistance, "       \033[1;31mMiss\033[0m"},
 	}
 	noteColors = map[int]string{
 		1:  "\033[38;2;236;30;0m",    // 1/4 red
