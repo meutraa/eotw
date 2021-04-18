@@ -43,8 +43,10 @@ var (
 		{1, 10, " \033[1;35mRidiculous\033[0m"},
 		{2, 20, "  \033[38;5;153mMarvelous\033[0m"},
 		{3, 40, "      \033[1;36mGreat\033[0m"},
-		{4, 60, "       \033[1;32mOkay\033[0m"},
-		{5, missDistance, "       \033[1;31mMiss\033[0m"},
+		{4, 60, "       \033[1;32mGood\033[0m"},
+		{5, missDistance, "       \033[1;31mOkay\033[0m"},
+		{6, -1, "       \033[1;31mMiss\033[0m"},
+		// > miss = not hit at all
 	}
 )
 
@@ -65,13 +67,15 @@ func getDistance(n *game.Note, duration time.Duration) int64 {
 	return n.Ms - (duration + globalOffset).Milliseconds()
 }
 
-func judge(d float64) game.Judgement {
-	for _, judgement := range judgements {
+func judge(d float64) *game.Judgement {
+	for i := 0; i < len(judgements)-1; i++ {
+		judgement := judgements[i]
 		if d < judgement.Ms {
-			return judgement
+			return &judgement
 		}
 	}
-	return judgements[len(judgements)-1]
+	// This should never happen, since a check for d < missDistance is made
+	return nil
 }
 
 func run() error {
@@ -118,6 +122,7 @@ func run() error {
 	}
 
 	mc := int64(cc) >> 1
+	cen := rc >> 1
 	cis := &([nKey]int64{
 		mc - columnSpacing*3,
 		mc - columnSpacing,
@@ -187,6 +192,15 @@ func run() error {
 	totalHits := 0.0
 	stdev := 0.0
 
+	for i := 1; i < len(judgements)-1; i++ {
+		j := judgements[i]
+		bd := getDistance(&game.Note{Ms: int64(j.Ms)}, 0)
+		bdd := int64(math.Round(float64(bd)) / float64(speed))
+		c := 128 - ((96/len(judgements) - 1) * (i + 1))
+		r.AddDecoration(2, rc-barRow-bdd, fmt.Sprintf("\033[38;2;%v;%v;%vm─────────", c, c, c), 24000)
+		r.AddDecoration(2, rc-barRow+bdd, fmt.Sprintf("\033[38;2;%v;%v;%vm─────────", c, c, c), 24000)
+	}
+
 	r.RenderLoop(startDelay, func(now, deadline time.Time, duration time.Duration) bool {
 		if duration.Milliseconds()-5000 > chart.Notes[len(chart.Notes)-1].Ms {
 			return false
@@ -225,11 +239,12 @@ func run() error {
 				score += distance
 				totalHits += 1
 				sumOfDistance += dirDistance
+				// because distance is < missDistance, this should never be nil
 				judgement := judge(distance)
 				counts[judgement.Index]++
 				closestNote.HitTime = duration.Milliseconds()
 				closestNote.Hit = true
-				if totalHits > 2 {
+				if totalHits > 1 {
 					stdev = 0.0
 					mean = sumOfDistance / totalHits
 					for _, n := range chart.Notes {
@@ -255,7 +270,6 @@ func run() error {
 		// Render notes
 		for _, note := range chart.Notes {
 			// clear all existing renders
-			miss := 0
 			col := cis[note.Index]
 			if isRowInField(rc, note.Row, false) {
 				r.Fill(note.Row, col, " ")
@@ -268,9 +282,8 @@ func run() error {
 
 			// Is this row within the playing field?
 			if !note.Miss && note.Row > rc && !note.Hit && !note.IsMine {
-				miss = 1
+				counts[len(counts)-1] += 1
 				note.Miss = true
-				cen := rc >> 1
 				r.AddDecoration(col-1, cen-1, "\033[1;31m╭", 240)
 				r.AddDecoration(col+1, cen-1, "\033[1;31m╮", 240)
 				r.AddDecoration(col-1, cen, "\033[1;31m╰", 240)
@@ -282,7 +295,6 @@ func run() error {
 					r.Fill(note.Row, col, th.RenderNote(note.Index, note.Denom))
 				}
 			}
-			counts[len(counts)-1] += miss
 		}
 
 		// remainingTime := deadline.Sub(time.Now())
