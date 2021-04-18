@@ -19,15 +19,17 @@ import (
 	"github.com/faiface/beep/mp3"
 	"github.com/faiface/beep/speaker"
 	"github.com/faiface/beep/vorbis"
-	"golang.org/x/sys/unix"
+	"golang.org/x/term"
 )
 
 const (
-	globalOffset  = 0.00
-	missDistance  = 220
-	startDelay    = 3000 * time.Millisecond
-	flashLength   = 60 // error flash length ms
-	speed         = 12 // lower is faster
+	globalOffset = 0.00
+	frameRate    = 240
+	missDistance = 220
+	startDelay   = 3000 * time.Millisecond
+	flashLength  = 60 // error flash length ms
+	// If the note is 300ms away, base distance is 300 rows, this divides that
+	speed         = 1000 / frameRate * 3
 	bottomPadding = 8
 	mineSym       = "⨯"
 	framePeriod   = 1 * time.Millisecond // game loop/render deadline
@@ -367,7 +369,7 @@ func judge(d float64) Judgement {
 func run() error {
 	flag.Parse()
 
-	ws, err := unix.IoctlGetWinsize(unix.Stdout, unix.TIOCGWINSZ)
+	cc, rc, err := term.GetSize(int(os.Stdout.Fd()))
 	if nil != err {
 		return fmt.Errorf("unable to get terminal size: %w", err)
 	}
@@ -401,8 +403,7 @@ func run() error {
 		return errors.New("unable to find .sm and .mp3 file in given directory")
 	}
 
-	mc := int64(ws.Col) >> 1
-	rc := int64(ws.Row)
+	mc := int64(cc) >> 1
 	space := int64(6)
 	cis := &([4]int64{mc - space*3, mc - space, mc + space, mc + space*3})
 	sideCol := mc - space*9
@@ -524,12 +525,12 @@ func run() error {
 
 		// Render the hit bar
 		for i, sym := range barSyms {
-			str += fill(cis[i], rc-bottomPadding, sym)
+			str += fill(cis[i], int64(rc)-bottomPadding, sym)
 		}
 
 		// Render notes
 		for _, line := range chart.notes {
-			mulstr, miss := line.step(now, currentDuration, cis, rc)
+			mulstr, miss := line.step(now, currentDuration, cis, int64(rc))
 			str += mulstr
 			counts[len(counts)-1] += miss
 		}
