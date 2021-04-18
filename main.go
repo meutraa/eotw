@@ -26,20 +26,21 @@ import (
 )
 
 const (
-	globalOffset = 0.00
+	globalOffset = 0 * time.Millisecond
 	frameRate    = 240
 	missDistance = barRow * speed // I count off the screen as missed
 	startDelay   = 3000 * time.Millisecond
 	flashLength  = 60 // error flash length ms
 	nKey         = 4
 	// If the note is 300ms away, base distance is 300 rows, this divides that
-	speed  = 1000 / frameRate * 3
-	barRow = 8 // from the bottom of the screen
+	speed         = 1000 / frameRate * 3
+	barRow        = 8 // from the bottom of the screen
+	columnSpacing = 6 // columns between the note columns
 )
 
 var (
-	keys       = [...]string{"_", "-", "m", "p"}
-	judgements = []Judgement{
+	keys       = [nKey]string{"_", "-", "m", "p"}
+	judgements = []game.Judgement{
 		{0, 5, "      \033[1;31mE\033[38;5;208mx\033[1;33ma\033[1;32mc\033[38;5;153mt\033[0m"},
 		{1, 10, " \033[1;35mRidiculous\033[0m"},
 		{2, 20, "  \033[38;5;153mMarvelous\033[0m"},
@@ -48,12 +49,6 @@ var (
 		{5, missDistance, "       \033[1;31mMiss\033[0m"},
 	}
 )
-
-type Judgement struct {
-	index int
-	ms    float64
-	name  string
-}
 
 var song = flag.String("f", "", "path to dir containing mp3 & sm file")
 
@@ -67,57 +62,14 @@ func isRowInField(rc int64, row int64, hit bool) bool {
 	return !hit && (row < rc && row > 0)
 }
 
-func step(r render.Renderer, th theme.Theme, note *game.Note, now time.Time, currentDuration time.Duration, cis *[4]int64, rc int64) (miss int) {
-	// clear all existing renders
-	col := cis[note.Index]
-	if isRowInField(rc, note.Row, false) {
-		r.Fill(note.Row, col, " ")
-	}
-	if note.MissFlashRemaining > 1 {
-		note.MissFlashRemaining--
-	} else if note.MissFlashRemaining == 1 {
-		note.MissFlashRemaining--
-		// clear flash
-		for _, note := range *note.MissFlash {
-			r.Fill(note.Row, note.Column, " ")
-		}
-	} // else 0 and does not exist anymore
-
-	// Calculate the new row based on time
-	nr := (rc - barRow)
-	distance := int64(math.Round(float64((note.Ms - currentDuration.Milliseconds())) / float64(speed)))
-	note.Row = nr - distance
-
-	// Is this row within the playing field?
-	if !note.Miss && note.Row > rc && !note.Hit && !note.IsMine {
-		miss = 1
-		note.Miss = true
-		// flash the miss
-		note.MissFlashRemaining = flashLength
-		cen := rc >> 1
-		note.MissFlash = &map[string]graphics.Point{
-			"╭": {col - 1, cen - 1},
-			"╮": {col + 1, cen - 1},
-			"╰": {col - 1, cen},
-			"╯": {col + 1, cen},
-		}
-		for c, p := range *note.MissFlash {
-			r.Fill(p.Row, p.Column, "\033[1;31m"+c)
-		}
-	} else if isRowInField(rc, note.Row, note.Hit) {
-		if note.IsMine {
-			r.Fill(note.Row, col, th.RenderMine(note.Index, note.Denom))
-		} else {
-			r.Fill(note.Row, col, th.RenderNote(note.Index, note.Denom))
-		}
-	}
-	return
+// Use the global offest to calculate the distance to a note
+func getDistance(n *game.Note, duration time.Duration) int64 {
+	return n.Ms - (duration + globalOffset).Milliseconds()
 }
 
-// Returns an index of the judgement array
-func judge(d float64) Judgement {
+func judge(d float64) game.Judgement {
 	for _, judgement := range judgements {
-		if d < judgement.ms {
+		if d < judgement.Ms {
 			return judgement
 		}
 	}
@@ -132,10 +84,11 @@ func run() error {
 
 	flag.Parse()
 
-	cc, rc, err := term.GetSize(int(os.Stdout.Fd()))
+	columns, rows, err := term.GetSize(int(os.Stdout.Fd()))
 	if nil != err {
 		return fmt.Errorf("unable to get terminal size: %w", err)
 	}
+	rc, cc := int64(rows), int64(columns)
 
 	keyChannel, err := keyboard.GetKeys(128)
 	if nil != err {
@@ -167,9 +120,13 @@ func run() error {
 	}
 
 	mc := int64(cc) >> 1
-	space := int64(6)
-	cis := &([4]int64{mc - space*3, mc - space, mc + space, mc + space*3})
-	sideCol := mc - space*9
+	cis := &([nKey]int64{
+		mc - columnSpacing*3,
+		mc - columnSpacing,
+		mc + columnSpacing,
+		mc + columnSpacing*3,
+	})
+	sideCol := mc - columnSpacing*9
 
 	charts, err := psr.Parse(chartFile)
 	if nil != err {
@@ -255,11 +212,11 @@ func run() error {
 					(note.Index != 3 && string(key.Rune) == keys[3]) {
 					continue
 				}
-				dd := float64(note.Ms - duration.Milliseconds())
-				d := math.Abs(dd)
+				dd := getDistance(note, duration)
+				d := math.Abs(float64(dd))
 				// log.Printf("hiiiiiit %v %v = %v", note.ms, currentDuration.Milliseconds(), dd)
 				if d < distance {
-					dirDistance = dd
+					dirDistance = float64(dd)
 					distance = d
 					closestNote = note
 				} else if nil != closestNote {
@@ -272,7 +229,7 @@ func run() error {
 				totalHits += 1
 				sumOfDistance += dirDistance
 				judgement := judge(distance)
-				counts[judgement.index]++
+				counts[judgement.Index]++
 				closestNote.HitTime = duration.Milliseconds()
 				closestNote.Hit = true
 				if totalHits > 2 {
@@ -300,7 +257,50 @@ func run() error {
 
 		// Render notes
 		for _, note := range chart.Notes {
-			miss := step(r, th, note, now, duration, cis, int64(rc))
+			// clear all existing renders
+			miss := 0
+			col := cis[note.Index]
+			if isRowInField(rc, note.Row, false) {
+				r.Fill(note.Row, col, " ")
+			}
+			if note.MissFlashRemaining > 1 {
+				note.MissFlashRemaining--
+			} else if note.MissFlashRemaining == 1 {
+				note.MissFlashRemaining--
+				// clear flash
+				for _, note := range *note.MissFlash {
+					r.Fill(note.Row, note.Column, " ")
+				}
+			} // else 0 and does not exist anymore
+
+			// Calculate the new row based on time
+			nr := (rc - barRow)
+			distance := int64(math.Round(float64(getDistance(note, duration))) / float64(speed))
+			note.Row = nr - distance
+
+			// Is this row within the playing field?
+			if !note.Miss && note.Row > rc && !note.Hit && !note.IsMine {
+				miss = 1
+				note.Miss = true
+				// flash the miss
+				note.MissFlashRemaining = flashLength
+				cen := rc >> 1
+				note.MissFlash = &map[string]graphics.Point{
+					"╭": {col - 1, cen - 1},
+					"╮": {col + 1, cen - 1},
+					"╰": {col - 1, cen},
+					"╯": {col + 1, cen},
+				}
+				for c, p := range *note.MissFlash {
+					r.Fill(p.Row, p.Column, "\033[1;31m"+c)
+				}
+			} else if isRowInField(rc, note.Row, note.Hit) {
+				if note.IsMine {
+					r.Fill(note.Row, col, th.RenderMine(note.Index, note.Denom))
+				} else {
+					r.Fill(note.Row, col, th.RenderNote(note.Index, note.Denom))
+				}
+			}
 			counts[len(counts)-1] += miss
 		}
 
@@ -315,7 +315,7 @@ func run() error {
 		r.Fill(13, sideCol, fmt.Sprintf("      Total:  %6v", chart.NoteCount))
 		r.Fill(14, sideCol, fmt.Sprintf("      Mines:  %6v", chart.MineCount))
 		for i, judgement := range judgements {
-			r.Fill(int64(18+i), sideCol, fmt.Sprintf("%v:  %6v", judgement.name, counts[i]))
+			r.Fill(int64(18+i), sideCol, fmt.Sprintf("%v:  %6v", judgement.Name, counts[i]))
 		}
 		r.Flush()
 
