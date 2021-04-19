@@ -2,16 +2,16 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
+	"git.lost.host/meutraa/eott/internal/config"
 	"git.lost.host/meutraa/eott/internal/game"
 	"git.lost.host/meutraa/eott/internal/parser"
 	"git.lost.host/meutraa/eott/internal/render"
@@ -29,27 +29,20 @@ const (
 	missDistance = barRow * speed // I count off the screen as missed
 	nKey         = 4
 	// If the note is 300ms away, base distance is 300 rows, this divides that
-	speed         = 1000 / frameRate * 3
-	barRow        = 8 // from the bottom of the screen
-	columnSpacing = 6 // columns between the note columns
+	speed  = 1000 / frameRate * 3
+	barRow = 8 // from the bottom of the screen
 )
 
 var (
-	song         = flag.String("f", "", "path to dir containing mp3 & sm file")
-	rate         = flag.Float64("r", 1.0, "playback seed")
-	globalOffset = flag.Int64("o", 0, "gloabl offset (milliseconds)")
-	startDelay   = flag.Int64("d", 1500, "start delay (milliseconds)")
-
 	keys       = [nKey]string{"_", "-", "m", "p"}
 	judgements = []game.Judgement{
-		{0, 5, "      \033[1;31mE\033[38;5;208mx\033[1;33ma\033[1;32mc\033[38;5;153mt\033[0m"},
-		{1, 10, " \033[1;35mRidiculous\033[0m"},
-		{2, 20, "  \033[38;5;153mMarvelous\033[0m"},
-		{3, 40, "      \033[1;36mGreat\033[0m"},
-		{4, 60, "       \033[1;32mGood\033[0m"},
-		{5, missDistance, "       \033[1;31mOkay\033[0m"},
-		{6, -1, "       \033[1;31mMiss\033[0m"},
-		// > miss = not hit at all
+		{Ms: 5, Name: "      \033[1;31mE\033[38;5;208mx\033[1;33ma\033[1;32mc\033[38;5;153mt\033[0m"},
+		{Ms: 10, Name: " \033[1;35mRidiculous\033[0m"},
+		{Ms: 20, Name: "  \033[38;5;153mMarvelous\033[0m"},
+		{Ms: 40, Name: "      \033[1;36mGreat\033[0m"},
+		{Ms: 60, Name: "       \033[1;32mGood\033[0m"},
+		{Ms: missDistance, Name: "       \033[1;31mOkay\033[0m"},
+		{Ms: -1, Name: "       \033[1;31mMiss\033[0m"},
 	}
 )
 
@@ -59,24 +52,24 @@ func main() {
 	}
 }
 
-func isRowInField(rc int64, row int64, hit bool) bool {
+func isRowInField(rc int, row int, hit bool) bool {
 	return !hit && (row < rc && row > 0)
 }
 
 // Use the global offest to calculate the distance to a note
 func getDistance(n *game.Note, duration time.Duration) int64 {
-	return int64(math.Round(float64(n.Ms)/(*rate))) - duration.Milliseconds() + *globalOffset
+	return int64(math.Round(float64(n.Ms)/(*config.Rate))) - duration.Milliseconds() + *config.Offset
 }
 
-func judge(d float64) *game.Judgement {
+func judge(d float64) (int, *game.Judgement) {
 	for i := 0; i < len(judgements)-1; i++ {
 		judgement := judgements[i]
 		if d < judgement.Ms {
-			return &judgement
+			return i, &judgement
 		}
 	}
 	// This should never happen, since a check for d < missDistance is made
-	return nil
+	return -1, nil
 }
 
 func run() error {
@@ -85,13 +78,11 @@ func run() error {
 	var th theme.Theme = &theme.DefaultTheme{}
 	var psr parser.Parser = &parser.DefaultParser{}
 
-	flag.Parse()
-
 	columns, rows, err := term.GetSize(int(os.Stdout.Fd()))
 	if nil != err {
 		return fmt.Errorf("unable to get terminal size: %w", err)
 	}
-	rc, cc := int64(rows), int64(columns)
+	rc, cc := rows, columns
 
 	keyChannel, err := keyboard.GetKeys(128)
 	if nil != err {
@@ -105,13 +96,14 @@ func run() error {
 
 	var mp3File, ogg, chartFile string
 
-	if err := filepath.Walk(*song, func(path string, info os.FileInfo, err error) error {
-		if strings.HasSuffix(info.Name(), ".mp3") {
-			mp3File = path
-		} else if strings.HasSuffix(info.Name(), ".ogg") {
-			ogg = path
-		} else if strings.HasSuffix(info.Name(), ".sm") {
-			chartFile = path
+	if err := filepath.Walk(*config.Directory, func(p string, info os.FileInfo, err error) error {
+		switch path.Ext(info.Name()) {
+		case ".mp3":
+			mp3File = p
+		case ".ogg":
+			ogg = p
+		case ".sm":
+			chartFile = p
 		}
 		return nil
 	}); nil != err {
@@ -119,18 +111,21 @@ func run() error {
 	}
 
 	if (mp3File == "" && ogg == "") || chartFile == "" {
-		return errors.New("unable to find .sm and .mp3 file in given directory")
+		return errors.New("unable to find .sm and .mp3/.ogg file in given directory")
 	}
 
-	mc := int64(cc) >> 1
+	mc := cc >> 1
 	cen := rc >> 1
-	cis := &([nKey]int64{
-		mc - columnSpacing*3,
-		mc - columnSpacing,
-		mc + columnSpacing,
-		mc + columnSpacing*3,
+	cis := &([nKey]int{
+		mc - *config.ColumnSpacing*3,
+		mc - *config.ColumnSpacing,
+		mc + *config.ColumnSpacing,
+		mc + *config.ColumnSpacing*3,
 	})
-	sideCol := mc - columnSpacing*9
+	sideCol := cis[0] - 36
+	if sideCol < 2 {
+		sideCol = 2
+	}
 
 	charts, err := psr.Parse(chartFile)
 	if nil != err {
@@ -170,7 +165,7 @@ func run() error {
 	}
 	defer streamer.Close()
 
-	speaker.Init(beep.SampleRate(math.Round(float64(format.SampleRate)*(*rate))), format.SampleRate.N(time.Second/60))
+	speaker.Init(beep.SampleRate(math.Round(float64(format.SampleRate)*(*config.Rate))), format.SampleRate.N(time.Second/60))
 
 	// Clear the screen and hide the cursor
 	r.Init()
@@ -180,41 +175,18 @@ func run() error {
 	}()
 
 	go func() {
-		time.Sleep(time.Duration(*startDelay) * time.Millisecond)
+		time.Sleep(time.Duration(*config.Delay) * time.Millisecond)
 		speaker.Play(streamer)
 	}()
 
 	score := 0.0
 	counts := make([]int, len(judgements))
-
-	// stdev
 	sumOfDistance := 0.0
 	mean := 0.0
 	totalHits := 0.0
 	stdev := 0.0
 
-	/*{
-		cd := 96 / (len(judgements) - 1)
-		for i := 1; i < len(judgements)-1; i++ {
-			j := judgements[i]
-			bd := getDistance(&game.Note{Ms: int64(j.Ms)}, 0)
-			bdd := int64(math.Round(float64(bd)) / float64(speed))
-			c := 156 - cd*(i+1)
-			cm1 := c - (cd / 2)
-			cm2 := c - (cd/2)*2
-			cm3 := c - (cd/2)*3
-			cm4 := c - (cd/2)*4
-			m := fmt.Sprintf("\033[38;2;%v;%v;%vm───", c, c, c)
-			m1 := fmt.Sprintf("\033[38;2;%v;%v;%vm─", cm1, cm1, cm1)
-			m2 := fmt.Sprintf("\033[38;2;%v;%v;%vm─", cm2, cm2, cm2)
-			m3 := fmt.Sprintf("\033[38;2;%v;%v;%vm─", cm3, cm3, cm3)
-			m4 := fmt.Sprintf("\033[38;2;%v;%v;%vm─", cm4, cm4, cm4)
-			r.AddDecoration(2, rc-barRow-bdd, fmt.Sprintf("%v%v%v%v%v%v%v%v%v\033[0m", m4, m3, m2, m1, m, m1, m2, m3, m4), 24000)
-			r.AddDecoration(2, rc-barRow+bdd, fmt.Sprintf("%v%v%v%v%v%v%v%v%v\033[0m", m4, m3, m2, m1, m, m1, m2, m3, m4), 24000)
-		}
-	}*/
-
-	r.RenderLoop(time.Duration(*startDelay)*time.Millisecond, func(now, deadline time.Time, duration time.Duration) bool {
+	r.RenderLoop(time.Duration(*config.Delay)*time.Millisecond, func(now, deadline time.Time, duration time.Duration) bool {
 		if duration.Milliseconds()-5000 > chart.Notes[len(chart.Notes)-1].Ms {
 			return false
 		}
@@ -229,7 +201,7 @@ func run() error {
 			distance := 10000000.0
 			dirDistance := 1000000.0
 			for _, note := range chart.Notes {
-				if (note.Hit) ||
+				if (note.HitTime != 0) ||
 					(note.IsMine) ||
 					(note.Index != 0 && string(key.Rune) == keys[0]) ||
 					(note.Index != 1 && string(key.Rune) == keys[1]) ||
@@ -253,15 +225,14 @@ func run() error {
 				totalHits += 1
 				sumOfDistance += dirDistance
 				// because distance is < missDistance, this should never be nil
-				judgement := judge(distance)
-				counts[judgement.Index]++
-				closestNote.HitTime = duration.Milliseconds()
-				closestNote.Hit = true
+				index, _ := judge(distance)
+				counts[index]++
+				closestNote.HitTime = int64(math.Round(float64(duration.Milliseconds()) * *config.Rate))
 				if totalHits > 1 {
 					stdev = 0.0
 					mean = sumOfDistance / totalHits
 					for _, n := range chart.Notes {
-						if !n.Hit {
+						if n.HitTime == 0 {
 							continue
 						}
 						diff := float64(n.Ms - n.HitTime)
@@ -277,7 +248,7 @@ func run() error {
 
 		// Render the hit bar
 		for i := 0; i < nKey; i++ {
-			r.Fill(int64(rc)-barRow, cis[i], th.RenderHitField(i))
+			r.Fill(rc-barRow, cis[i], th.RenderHitField(i))
 		}
 
 		// Render notes
@@ -290,18 +261,18 @@ func run() error {
 
 			// Calculate the new row based on time
 			nr := (rc - barRow)
-			distance := int64(math.Round(float64(getDistance(note, duration))) / float64(speed))
+			distance := int(math.Round(float64(getDistance(note, duration))) / float64(speed))
 			note.Row = nr - distance
 
 			// Is this row within the playing field?
-			if !note.Miss && note.Row > rc && !note.Hit && !note.IsMine {
+			if !note.Miss && note.Row > rc && note.HitTime == 0 && !note.IsMine {
 				counts[len(counts)-1] += 1
 				note.Miss = true
 				r.AddDecoration(col-1, cen-1, "\033[1;31m╭", 240)
 				r.AddDecoration(col+1, cen-1, "\033[1;31m╮", 240)
 				r.AddDecoration(col-1, cen, "\033[1;31m╰", 240)
 				r.AddDecoration(col+1, cen, "\033[1;31m╯", 240)
-			} else if isRowInField(rc, note.Row, note.Hit) {
+			} else if isRowInField(rc, note.Row, note.HitTime != 0) {
 				if note.IsMine {
 					r.Fill(note.Row, col, th.RenderMine(note.Index, note.Denom))
 				} else {
@@ -321,7 +292,7 @@ func run() error {
 		r.Fill(13, sideCol, fmt.Sprintf("      Total:  %6v", chart.NoteCount))
 		r.Fill(14, sideCol, fmt.Sprintf("      Mines:  %6v", chart.MineCount))
 		for i, judgement := range judgements {
-			r.Fill(int64(18+i), sideCol, fmt.Sprintf("%v:  %6v", judgement.Name, counts[i]))
+			r.Fill(18+i, sideCol, fmt.Sprintf("%v:  %6v", judgement.Name, counts[i]))
 		}
 
 		return true

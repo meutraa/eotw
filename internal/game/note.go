@@ -1,12 +1,11 @@
 package game
 
 type Note struct {
-	Index   int
-	Row     int64
-	Denom   int
-	Hit     bool
+	Index   int // The chart column
+	Row     int // The current row this note is rendered on, for clearing
+	Denom   int // The beat length, as a denominator, 4 = 1/4 beat
 	IsMine  bool
-	Miss    bool
-	HitTime int64
-	Ms      int64
+	Miss    bool  // Has the note scrolled past the bottom edge of the terminal
+	HitTime int64 // When the note was hit
+	Ms      int64 // The time the note should be hit
 }

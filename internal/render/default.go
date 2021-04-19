@@ -2,16 +2,16 @@ package render
 
 import (
 	"fmt"
+	"image"
+	"image/color"
 	"time"
-
-	"git.lost.host/meutraa/eott/internal/graphics"
 )
 
 const framePeriod = 1 * time.Millisecond // game loop/render deadline
 
 type DefaultRenderer struct {
 	buffer      string
-	decorations []*graphics.Decoration
+	decorations []*Decoration
 }
 
 // Put the terminal in alt mode and clear the screen
@@ -24,11 +24,11 @@ func (r *DefaultRenderer) Deinit() {
 	fmt.Printf("\033[?1049l\033[?25h")
 }
 
-func (r *DefaultRenderer) AddDecoration(col, row int64, content string, frames int) {
-	r.decorations = append(r.decorations, &graphics.Decoration{
-		Point: graphics.Point{
-			Column: col,
-			Row:    row,
+func (r *DefaultRenderer) AddDecoration(col, row int, content string, frames int) {
+	r.decorations = append(r.decorations, &Decoration{
+		Point: image.Point{
+			X: col,
+			Y: row,
 		},
 		Content: content,
 		Frames:  frames,
@@ -37,10 +37,10 @@ func (r *DefaultRenderer) AddDecoration(col, row int64, content string, frames i
 }
 
 func (r *DefaultRenderer) tickDecorations() {
-	nd := []*graphics.Decoration{}
+	nd := []*Decoration{}
 	for _, d := range r.decorations {
 		if d.Frames == 0 {
-			r.Fill(d.Point.Row, d.Point.Column, " ")
+			r.Fill(d.Point.Y, d.Point.X, " ")
 			continue
 		}
 		nd = append(nd, d)
@@ -68,12 +68,12 @@ func (r *DefaultRenderer) RenderLoop(delay time.Duration, render func(now, deadl
 	}
 }
 
-func (r *DefaultRenderer) Fill(row, column int64, message string) {
+func (r *DefaultRenderer) Fill(row, column int, message string) {
 	r.buffer += fmt.Sprintf("\033[%d;%dH%v", row, column, message)
 }
 
-func (r *DefaultRenderer) FillColor(row, column int64, color graphics.Color, message string) {
-	r.buffer += fmt.Sprintf("\033[%d;%dH\033[38;2;%v;%v;%vm%v\033[0m", row, column, color.R, color.G, color.B, message)
+func (r *DefaultRenderer) FillColor(row, column int, c color.RGBA, message string) {
+	r.buffer += fmt.Sprintf("\033[%d;%dH\033[38;2;%v;%v;%vm%v\033[0m", row, column, c.R, c.G, c.B, message)
 }
 
 func (r *DefaultRenderer) flush() {

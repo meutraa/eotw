@@ -1,16 +1,22 @@
 package render
 
 import (
+	"image"
+	"image/color"
 	"time"
-
-	"git.lost.host/meutraa/eott/internal/graphics"
 )
 
 type Renderer interface {
 	Init()
 	Deinit()
-	AddDecoration(col, row int64, content string, frames int)
+	AddDecoration(col, row int, content string, frames int)
 	RenderLoop(delay time.Duration, render func(now, deadline time.Time, duration time.Duration) bool)
-	Fill(row, column int64, message string)
-	FillColor(row, column int64, color graphics.Color, message string)
+	Fill(row, column int, message string)
+	FillColor(row, column int, color color.RGBA, message string)
+}
+
+type Decoration struct {
+	Point   image.Point
+	Content string
+	Frames  int // remaining frames until removed
 }
