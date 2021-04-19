@@ -16,20 +16,20 @@ func (t *DefaultTheme) RenderMine(column int, denom int) string {
 
 func (t *DefaultTheme) RenderNote(column int, denom int) string {
 	r, g, b := getNoteColor(denom)
-	return fmt.Sprintf("\033[38;2;%v;%v;%vm%v\033[0m", r, g, b, syms[column])
+	return fmt.Sprintf("\033[38;2;%v;%v;%vm%v\033[0m", r, g, b, noteSym)
 }
 
 func (t *DefaultTheme) RenderHitField(column int) string {
-	return barSyms[column]
+	return barSym
 }
 
 const (
 	mineSym = "⨯"
+	noteSym = "⬤"
+	barSym  = "-"
 )
 
 var (
-	syms       = [...]string{"⬤", "⬤", "⬤", "⬤"}
-	barSyms    = [...]string{"-", "-", "-", "-"}
 	noteColors = map[int]color.RGBA{
 		1:  {R: 236, G: 30, B: 0},    // 1/4 red
 		2:  {R: 0, G: 118, B: 236},   // 1/8 blue

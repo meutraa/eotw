@@ -54,13 +54,17 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 	difficulties := []game.Difficulty{}
 	for _, section := range sections[1:] {
 		lines := strings.SplitN(section, "\n", 7)
-		if !strings.Contains(lines[1], "dance-single") {
+		chartType := strings.TrimSpace(lines[1])
+		chartType = strings.TrimSuffix(chartType, ":")
+		nKeys, ok := game.NKeyMap[chartType]
+		if !ok {
 			continue
 		}
 		difficulties = append(difficulties, game.Difficulty{
-			Name:    strings.TrimSpace(lines[3]),
-			Msd:     strings.TrimSpace(lines[4]),
+			Name:    strings.TrimSuffix(strings.TrimSpace(lines[3]), ":"),
+			Msd:     strings.TrimSuffix(strings.TrimSpace(lines[4]), ":"),
 			Section: lines[6],
+			NKeys:   nKeys,
 		})
 	}
 
@@ -105,9 +109,8 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 	charts := []*game.Chart{}
 	for _, difficulty := range difficulties {
 		// Start time of first note
-		// TODO ?? t := offset + globalOffset
 		t := offset
-		currentBeat := float64(0.0)
+		var currentBeat float64 = 0.0
 
 		notes := []*game.Note{}
 		mineCount := 0

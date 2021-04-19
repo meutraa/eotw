@@ -24,8 +24,6 @@ import (
 	"golang.org/x/term"
 )
 
-const ()
-
 func main() {
 	if err := run(); nil != err {
 		log.Fatalln(err)
@@ -41,11 +39,14 @@ func getDistance(n *game.Note, duration time.Duration) int64 {
 	return int64(math.Round(float64(n.Ms)/(*config.Rate))) - (duration + *config.Offset).Milliseconds()
 }
 
+func getColumn(nKeys uint8, mc, index int) int {
+	return mc - int(nKeys>>1)*int(*config.ColumnSpacing*2) + index*int(*config.ColumnSpacing*2)
+}
+
 func judge(d float64) (int, *game.Judgement) {
-	for i := 0; i < len(config.Judgements)-1; i++ {
-		judgement := config.Judgements[i]
-		if d < judgement.Ms {
-			return i, &judgement
+	for i, j := range config.Judgements {
+		if d < j.Ms {
+			return i, &j
 		}
 	}
 	// This should never happen, since a check for d < missDistance is made
@@ -96,16 +97,6 @@ func run() error {
 
 	mc := cc >> 1
 	cen := rc >> 1
-	cis := &([...]int{
-		mc - int(*config.ColumnSpacing)*3,
-		mc - int(*config.ColumnSpacing),
-		mc + int(*config.ColumnSpacing),
-		mc + int(*config.ColumnSpacing)*3,
-	})
-	sideCol := cis[0] - 36
-	if sideCol < 2 {
-		sideCol = 2
-	}
 
 	charts, err := psr.Parse(chartFile)
 	if nil != err {
@@ -114,7 +105,14 @@ func run() error {
 
 	// Difficulty selection
 	for i, c := range charts {
-		fmt.Printf("%2v) %3v  %5v  %v\n", i, c.Difficulty.Msd, len(c.Notes), c.Difficulty.Name)
+		fmt.Printf(
+			"%2v) %v-key    %3v %v\n\tNotes: %5v\n",
+			i,
+			c.Difficulty.NKeys,
+			c.Difficulty.Msd,
+			c.Difficulty.Name,
+			len(c.Notes),
+		)
 	}
 	key := <-keyChannel
 	index, err := strconv.ParseInt(string(key.Rune), 10, 64)
@@ -159,6 +157,11 @@ func run() error {
 		speaker.Play(streamer)
 	}()
 
+	sideCol := getColumn(chart.Difficulty.NKeys, mc, 0) - 36
+	if sideCol < 2 {
+		sideCol = 2
+	}
+
 	score := 0.0
 	counts := make([]int, len(config.Judgements))
 	sumOfDistance := 0.0
@@ -182,11 +185,15 @@ func run() error {
 			dirDistance := 1000000.0
 			for _, note := range chart.Notes {
 				if (note.HitTime != 0) ||
-					(note.IsMine) ||
-					(note.Index != 0 && key.Rune == config.Keys[0]) ||
-					(note.Index != 1 && key.Rune == config.Keys[1]) ||
-					(note.Index != 2 && key.Rune == config.Keys[2]) ||
-					(note.Index != 3 && key.Rune == config.Keys[3]) {
+					(note.IsMine) {
+					// (note.Index != 0 && key.Rune == config.Keys[0]) ||
+					// (note.Index != 1 && key.Rune == config.Keys[1]) ||
+					// (note.Index != 2 && key.Rune == config.Keys[2]) ||
+					// (note.Index != 3 && key.Rune == config.Keys[3]) {
+					continue
+				}
+				noteCol := config.KeyColumn(key.Rune, chart.Difficulty.NKeys)
+				if note.Index != noteCol {
 					continue
 				}
 				dd := getDistance(note, duration)
@@ -227,14 +234,14 @@ func run() error {
 		}
 
 		// Render the hit bar
-		for i := 0; i < config.NKey; i++ {
-			r.Fill(rc-int(*config.BarRow), cis[i], th.RenderHitField(i))
+		for i := 0; i < int(chart.Difficulty.NKeys); i++ {
+			r.Fill(rc-int(*config.BarRow), getColumn(chart.Difficulty.NKeys, mc, i), th.RenderHitField(i))
 		}
 
 		// Render notes
 		for _, note := range chart.Notes {
 			// clear all existing renders
-			col := cis[note.Index]
+			col := getColumn(chart.Difficulty.NKeys, mc, note.Index)
 			if isRowInField(rc, note.Row, false) {
 				r.Fill(note.Row, col, " ")
 			}
