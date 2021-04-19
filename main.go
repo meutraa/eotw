@@ -25,10 +25,8 @@ import (
 )
 
 const (
-	globalOffset = 0 * time.Millisecond
 	frameRate    = 240
 	missDistance = barRow * speed // I count off the screen as missed
-	startDelay   = 3000 * time.Millisecond
 	nKey         = 4
 	// If the note is 300ms away, base distance is 300 rows, this divides that
 	speed         = 1000 / frameRate * 3
@@ -37,6 +35,11 @@ const (
 )
 
 var (
+	song         = flag.String("f", "", "path to dir containing mp3 & sm file")
+	rate         = flag.Float64("r", 1.0, "playback seed")
+	globalOffset = flag.Int64("o", 0, "gloabl offset (milliseconds)")
+	startDelay   = flag.Int64("d", 1500, "start delay (milliseconds)")
+
 	keys       = [nKey]string{"_", "-", "m", "p"}
 	judgements = []game.Judgement{
 		{0, 5, "      \033[1;31mE\033[38;5;208mx\033[1;33ma\033[1;32mc\033[38;5;153mt\033[0m"},
@@ -50,8 +53,6 @@ var (
 	}
 )
 
-var song = flag.String("f", "", "path to dir containing mp3 & sm file")
-
 func main() {
 	if err := run(); nil != err {
 		log.Fatalln(err)
@@ -64,7 +65,7 @@ func isRowInField(rc int64, row int64, hit bool) bool {
 
 // Use the global offest to calculate the distance to a note
 func getDistance(n *game.Note, duration time.Duration) int64 {
-	return n.Ms - (duration + globalOffset).Milliseconds()
+	return int64(math.Round(float64(n.Ms)/(*rate))) - duration.Milliseconds() + *globalOffset
 }
 
 func judge(d float64) *game.Judgement {
@@ -169,7 +170,7 @@ func run() error {
 	}
 	defer streamer.Close()
 
-	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/60))
+	speaker.Init(beep.SampleRate(math.Round(float64(format.SampleRate)*(*rate))), format.SampleRate.N(time.Second/60))
 
 	// Clear the screen and hide the cursor
 	r.Init()
@@ -179,7 +180,7 @@ func run() error {
 	}()
 
 	go func() {
-		time.Sleep(startDelay)
+		time.Sleep(time.Duration(*startDelay) * time.Millisecond)
 		speaker.Play(streamer)
 	}()
 
@@ -192,16 +193,28 @@ func run() error {
 	totalHits := 0.0
 	stdev := 0.0
 
-	for i := 1; i < len(judgements)-1; i++ {
-		j := judgements[i]
-		bd := getDistance(&game.Note{Ms: int64(j.Ms)}, 0)
-		bdd := int64(math.Round(float64(bd)) / float64(speed))
-		c := 128 - ((96/len(judgements) - 1) * (i + 1))
-		r.AddDecoration(2, rc-barRow-bdd, fmt.Sprintf("\033[38;2;%v;%v;%vm─────────", c, c, c), 24000)
-		r.AddDecoration(2, rc-barRow+bdd, fmt.Sprintf("\033[38;2;%v;%v;%vm─────────", c, c, c), 24000)
-	}
+	/*{
+		cd := 96 / (len(judgements) - 1)
+		for i := 1; i < len(judgements)-1; i++ {
+			j := judgements[i]
+			bd := getDistance(&game.Note{Ms: int64(j.Ms)}, 0)
+			bdd := int64(math.Round(float64(bd)) / float64(speed))
+			c := 156 - cd*(i+1)
+			cm1 := c - (cd / 2)
+			cm2 := c - (cd/2)*2
+			cm3 := c - (cd/2)*3
+			cm4 := c - (cd/2)*4
+			m := fmt.Sprintf("\033[38;2;%v;%v;%vm───", c, c, c)
+			m1 := fmt.Sprintf("\033[38;2;%v;%v;%vm─", cm1, cm1, cm1)
+			m2 := fmt.Sprintf("\033[38;2;%v;%v;%vm─", cm2, cm2, cm2)
+			m3 := fmt.Sprintf("\033[38;2;%v;%v;%vm─", cm3, cm3, cm3)
+			m4 := fmt.Sprintf("\033[38;2;%v;%v;%vm─", cm4, cm4, cm4)
+			r.AddDecoration(2, rc-barRow-bdd, fmt.Sprintf("%v%v%v%v%v%v%v%v%v\033[0m", m4, m3, m2, m1, m, m1, m2, m3, m4), 24000)
+			r.AddDecoration(2, rc-barRow+bdd, fmt.Sprintf("%v%v%v%v%v%v%v%v%v\033[0m", m4, m3, m2, m1, m, m1, m2, m3, m4), 24000)
+		}
+	}*/
 
-	r.RenderLoop(startDelay, func(now, deadline time.Time, duration time.Duration) bool {
+	r.RenderLoop(time.Duration(*startDelay)*time.Millisecond, func(now, deadline time.Time, duration time.Duration) bool {
 		if duration.Milliseconds()-5000 > chart.Notes[len(chart.Notes)-1].Ms {
 			return false
 		}
