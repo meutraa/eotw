@@ -15,6 +15,7 @@ import (
 	"git.lost.host/meutraa/eott/internal/game"
 	"git.lost.host/meutraa/eott/internal/parser"
 	"git.lost.host/meutraa/eott/internal/render"
+	"git.lost.host/meutraa/eott/internal/score"
 	"git.lost.host/meutraa/eott/internal/theme"
 	"github.com/eiannone/keyboard"
 	"github.com/faiface/beep"
@@ -32,11 +33,6 @@ func main() {
 
 func isRowInField(rc int, row int, hit bool) bool {
 	return !hit && (row < rc && row > 0)
-}
-
-// Use the global offest to calculate the distance to a note
-func getDistance(n *game.Note, duration time.Duration) int64 {
-	return int64(math.Round(float64(n.Ms)/(*config.Rate))) - (duration + *config.Offset).Milliseconds()
 }
 
 func getColumn(nKeys uint8, mc, index int) int {
@@ -58,6 +54,7 @@ func run() error {
 	var r render.Renderer = &render.DefaultRenderer{}
 	var th theme.Theme = &theme.DefaultTheme{}
 	var psr parser.Parser = &parser.DefaultParser{}
+	var scorer score.Scorer = &score.DefaultScorer{}
 
 	columns, rows, err := term.GetSize(int(os.Stdout.Fd()))
 	if nil != err {
@@ -103,8 +100,17 @@ func run() error {
 		return err
 	}
 
+	err = scorer.Init()
+	if nil != err {
+		return err
+	}
+	defer func() {
+		scorer.Deinit()
+	}()
+
 	// Difficulty selection
 	for i, c := range charts {
+		histories := scorer.Load(c)
 		fmt.Printf(
 			"%2v) %v-key    %3v %v\n\tNotes: %5v\n",
 			i,
@@ -113,6 +119,16 @@ func run() error {
 			c.Difficulty.Name,
 			len(c.Notes),
 		)
+		for i, history := range histories {
+			sc := scorer.Score(history)
+			fmt.Printf("\t\t%v: %2.1fx  Misses: %4v   Total Error: %v\n",
+				i,
+				history.Rate,
+				sc.MissCount,
+				sc.TotalError.Milliseconds(),
+			)
+		}
+		fmt.Printf("\n")
 	}
 	key := <-keyChannel
 	index, err := strconv.ParseInt(string(key.Rune), 10, 64)
@@ -152,11 +168,6 @@ func run() error {
 		r.Deinit()
 	}()
 
-	go func() {
-		time.Sleep(*config.Delay)
-		speaker.Play(streamer)
-	}()
-
 	sideCol := getColumn(chart.Difficulty.NKeys, mc, 0) - 36
 	if sideCol < 2 {
 		sideCol = 2
@@ -169,8 +180,16 @@ func run() error {
 	totalHits := 0.0
 	stdev := 0.0
 
+	finished := false
+
+	go func() {
+		time.Sleep(*config.Delay + *config.Offset)
+		speaker.Play(streamer)
+	}()
+
 	r.RenderLoop(*config.Delay, func(now, deadline time.Time, duration time.Duration) bool {
-		if duration.Milliseconds()-5000 > chart.Notes[len(chart.Notes)-1].Ms {
+		if scorer.Distance(*config.Rate, chart.Notes[len(chart.Notes)-1], duration.Milliseconds()) < 0 {
+			finished = true
 			return false
 		}
 
@@ -184,19 +203,14 @@ func run() error {
 			distance := 10000000.0
 			dirDistance := 1000000.0
 			for _, note := range chart.Notes {
-				if (note.HitTime != 0) ||
-					(note.IsMine) {
-					// (note.Index != 0 && key.Rune == config.Keys[0]) ||
-					// (note.Index != 1 && key.Rune == config.Keys[1]) ||
-					// (note.Index != 2 && key.Rune == config.Keys[2]) ||
-					// (note.Index != 3 && key.Rune == config.Keys[3]) {
+				if note.HitTime != 0 || note.IsMine {
 					continue
 				}
 				noteCol := config.KeyColumn(key.Rune, chart.Difficulty.NKeys)
 				if note.Index != noteCol {
 					continue
 				}
-				dd := getDistance(note, duration)
+				dd := scorer.Distance(*config.Rate, note, duration.Milliseconds())
 				d := math.Abs(float64(dd))
 				if d < distance {
 					dirDistance = float64(dd)
@@ -214,7 +228,7 @@ func run() error {
 				// because distance is < missDistance, this should never be nil
 				index, _ := judge(distance)
 				counts[index]++
-				closestNote.HitTime = int64(math.Round(float64(duration.Milliseconds()) * *config.Rate))
+				closestNote.HitTime = duration.Milliseconds()
 				if totalHits > 1 {
 					stdev = 0.0
 					mean = sumOfDistance / totalHits
@@ -222,8 +236,8 @@ func run() error {
 						if n.HitTime == 0 {
 							continue
 						}
-						diff := float64(n.Ms - n.HitTime)
-						xi := diff - mean
+						diff := scorer.Distance(*config.Rate, n, n.HitTime)
+						xi := float64(diff) - mean
 						xi2 := xi * xi
 						stdev += xi2
 					}
@@ -248,7 +262,8 @@ func run() error {
 
 			// Calculate the new row based on time
 			nr := rc - int(*config.BarRow)
-			distance := int(math.Round(float64(getDistance(note, duration))) / config.ScrollSpeed)
+			d := scorer.Distance(*config.Rate, note, duration.Milliseconds())
+			distance := int(math.Round(float64(d) / config.ScrollSpeed))
 			note.Row = nr - distance
 
 			// Is this row within the playing field?
@@ -284,6 +299,11 @@ func run() error {
 
 		return true
 	})
+
+	if finished {
+		scorer.Save(chart, *config.Rate)
+		log.Println("saved")
+	}
 	_ = <-keyChannel
 	return nil
 }

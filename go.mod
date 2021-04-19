@@ -9,6 +9,7 @@ require (
 	github.com/faiface/beep v1.0.2
 	github.com/hajimehoshi/go-mp3 v0.3.2 // indirect
 	github.com/hajimehoshi/oto v0.7.1 // indirect
+	github.com/mattn/go-sqlite3 v1.14.7
 	github.com/pkg/errors v0.9.1 // indirect
 	golang.org/x/exp v0.0.0-20210417010653-0739314eea07 // indirect
 	golang.org/x/image v0.0.0-20210220032944-ac19c3e999fb // indirect
