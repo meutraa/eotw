@@ -24,27 +24,7 @@ import (
 	"golang.org/x/term"
 )
 
-const (
-	frameRate    = 240
-	missDistance = barRow * speed // I count off the screen as missed
-	nKey         = 4
-	// If the note is 300ms away, base distance is 300 rows, this divides that
-	speed  = 1000 / frameRate * 3
-	barRow = 8 // from the bottom of the screen
-)
-
-var (
-	keys       = [nKey]string{"_", "-", "m", "p"}
-	judgements = []game.Judgement{
-		{Ms: 5, Name: "      \033[1;31mE\033[38;5;208mx\033[1;33ma\033[1;32mc\033[38;5;153mt\033[0m"},
-		{Ms: 10, Name: " \033[1;35mRidiculous\033[0m"},
-		{Ms: 20, Name: "  \033[38;5;153mMarvelous\033[0m"},
-		{Ms: 40, Name: "      \033[1;36mGreat\033[0m"},
-		{Ms: 60, Name: "       \033[1;32mGood\033[0m"},
-		{Ms: missDistance, Name: "       \033[1;31mOkay\033[0m"},
-		{Ms: -1, Name: "       \033[1;31mMiss\033[0m"},
-	}
-)
+const ()
 
 func main() {
 	if err := run(); nil != err {
@@ -58,12 +38,12 @@ func isRowInField(rc int, row int, hit bool) bool {
 
 // Use the global offest to calculate the distance to a note
 func getDistance(n *game.Note, duration time.Duration) int64 {
-	return int64(math.Round(float64(n.Ms)/(*config.Rate))) - duration.Milliseconds() + *config.Offset
+	return int64(math.Round(float64(n.Ms)/(*config.Rate))) - (duration + *config.Offset).Milliseconds()
 }
 
 func judge(d float64) (int, *game.Judgement) {
-	for i := 0; i < len(judgements)-1; i++ {
-		judgement := judgements[i]
+	for i := 0; i < len(config.Judgements)-1; i++ {
+		judgement := config.Judgements[i]
 		if d < judgement.Ms {
 			return i, &judgement
 		}
@@ -116,11 +96,11 @@ func run() error {
 
 	mc := cc >> 1
 	cen := rc >> 1
-	cis := &([nKey]int{
-		mc - *config.ColumnSpacing*3,
-		mc - *config.ColumnSpacing,
-		mc + *config.ColumnSpacing,
-		mc + *config.ColumnSpacing*3,
+	cis := &([...]int{
+		mc - int(*config.ColumnSpacing)*3,
+		mc - int(*config.ColumnSpacing),
+		mc + int(*config.ColumnSpacing),
+		mc + int(*config.ColumnSpacing)*3,
 	})
 	sideCol := cis[0] - 36
 	if sideCol < 2 {
@@ -175,18 +155,18 @@ func run() error {
 	}()
 
 	go func() {
-		time.Sleep(time.Duration(*config.Delay) * time.Millisecond)
+		time.Sleep(*config.Delay)
 		speaker.Play(streamer)
 	}()
 
 	score := 0.0
-	counts := make([]int, len(judgements))
+	counts := make([]int, len(config.Judgements))
 	sumOfDistance := 0.0
 	mean := 0.0
 	totalHits := 0.0
 	stdev := 0.0
 
-	r.RenderLoop(time.Duration(*config.Delay)*time.Millisecond, func(now, deadline time.Time, duration time.Duration) bool {
+	r.RenderLoop(*config.Delay, func(now, deadline time.Time, duration time.Duration) bool {
 		if duration.Milliseconds()-5000 > chart.Notes[len(chart.Notes)-1].Ms {
 			return false
 		}
@@ -203,10 +183,10 @@ func run() error {
 			for _, note := range chart.Notes {
 				if (note.HitTime != 0) ||
 					(note.IsMine) ||
-					(note.Index != 0 && string(key.Rune) == keys[0]) ||
-					(note.Index != 1 && string(key.Rune) == keys[1]) ||
-					(note.Index != 2 && string(key.Rune) == keys[2]) ||
-					(note.Index != 3 && string(key.Rune) == keys[3]) {
+					(note.Index != 0 && key.Rune == config.Keys[0]) ||
+					(note.Index != 1 && key.Rune == config.Keys[1]) ||
+					(note.Index != 2 && key.Rune == config.Keys[2]) ||
+					(note.Index != 3 && key.Rune == config.Keys[3]) {
 					continue
 				}
 				dd := getDistance(note, duration)
@@ -220,7 +200,7 @@ func run() error {
 					break
 				}
 			}
-			if nil != closestNote && distance < missDistance {
+			if nil != closestNote && distance < config.MissDistance {
 				score += distance
 				totalHits += 1
 				sumOfDistance += dirDistance
@@ -247,8 +227,8 @@ func run() error {
 		}
 
 		// Render the hit bar
-		for i := 0; i < nKey; i++ {
-			r.Fill(rc-barRow, cis[i], th.RenderHitField(i))
+		for i := 0; i < config.NKey; i++ {
+			r.Fill(rc-int(*config.BarRow), cis[i], th.RenderHitField(i))
 		}
 
 		// Render notes
@@ -260,8 +240,8 @@ func run() error {
 			}
 
 			// Calculate the new row based on time
-			nr := (rc - barRow)
-			distance := int(math.Round(float64(getDistance(note, duration))) / float64(speed))
+			nr := rc - int(*config.BarRow)
+			distance := int(math.Round(float64(getDistance(note, duration))) / config.ScrollSpeed)
 			note.Row = nr - distance
 
 			// Is this row within the playing field?
@@ -291,7 +271,7 @@ func run() error {
 		r.Fill(12, sideCol, fmt.Sprintf("       Mean:  %6.2f", mean))
 		r.Fill(13, sideCol, fmt.Sprintf("      Total:  %6v", chart.NoteCount))
 		r.Fill(14, sideCol, fmt.Sprintf("      Mines:  %6v", chart.MineCount))
-		for i, judgement := range judgements {
+		for i, judgement := range config.Judgements {
 			r.Fill(18+i, sideCol, fmt.Sprintf("%v:  %6v", judgement.Name, counts[i]))
 		}
 

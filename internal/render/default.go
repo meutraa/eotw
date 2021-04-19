@@ -5,9 +5,9 @@ import (
 	"image"
 	"image/color"
 	"time"
-)
 
-const framePeriod = 1 * time.Millisecond // game loop/render deadline
+	"git.lost.host/meutraa/eott/internal/config"
+)
 
 type DefaultRenderer struct {
 	buffer      string
@@ -55,7 +55,7 @@ func (r *DefaultRenderer) RenderLoop(delay time.Duration, render func(now, deadl
 	for cont {
 		now := time.Now()
 		duration := now.Sub(startTime)
-		deadline := now.Add(framePeriod)
+		deadline := now.Add(*config.FramePeriod)
 
 		cont = render(now, deadline, duration)
 
