@@ -120,7 +120,7 @@ func run() error {
 			len(c.Notes),
 		)
 		for i, history := range histories {
-			sc := scorer.Score(history)
+			sc := scorer.Score(c, &history)
 			fmt.Printf("\t\t%v: %2.1fx  Misses: %4v   Total Error: %v\n",
 				i,
 				history.Rate,
@@ -179,6 +179,7 @@ func run() error {
 	mean := 0.0
 	totalHits := 0.0
 	stdev := 0.0
+	inputs := []game.Input{}
 
 	finished := false
 
@@ -199,36 +200,22 @@ func run() error {
 			if key.Key == keyboard.KeyEsc {
 				return false
 			}
-			var closestNote *game.Note
-			distance := 10000000.0
-			dirDistance := 1000000.0
-			for _, note := range chart.Notes {
-				if note.HitTime != 0 || note.IsMine {
-					continue
-				}
-				noteCol := config.KeyColumn(key.Rune, chart.Difficulty.NKeys)
-				if note.Index != noteCol {
-					continue
-				}
-				dd := scorer.Distance(*config.Rate, note, duration.Milliseconds())
-				d := math.Abs(float64(dd))
-				if d < distance {
-					dirDistance = float64(dd)
-					distance = d
-					closestNote = note
-				} else if nil != closestNote {
-					// already found the closest, and this d is > md
-					break
-				}
+
+			// Which index was hit
+			noteCol := config.KeyColumn(key.Rune, chart.Difficulty.NKeys)
+			if -1 == noteCol {
+				continue // This is not a valid input
 			}
-			if nil != closestNote && distance < config.MissDistance {
-				score += distance
+			input := game.Input{Index: noteCol, HitTime: duration}
+			inputs = append(inputs, input)
+
+			scorer.ApplyInputToChart(chart, &input, *config.Rate, func(note *game.Note, distance, absDistance float64) {
+				score += absDistance
 				totalHits += 1
-				sumOfDistance += dirDistance
+				sumOfDistance += distance
 				// because distance is < missDistance, this should never be nil
 				index, _ := judge(distance)
 				counts[index]++
-				closestNote.HitTime = duration.Milliseconds()
 				if totalHits > 1 {
 					stdev = 0.0
 					mean = sumOfDistance / totalHits
@@ -244,7 +231,8 @@ func run() error {
 					stdev /= (totalHits - 1)
 					stdev = math.Sqrt(stdev)
 				}
-			}
+			})
+
 		}
 
 		// Render the hit bar
@@ -301,7 +289,7 @@ func run() error {
 	})
 
 	if finished {
-		scorer.Save(chart, *config.Rate)
+		scorer.Save(chart, &inputs, *config.Rate)
 		log.Println("saved")
 	}
 	_ = <-keyChannel
