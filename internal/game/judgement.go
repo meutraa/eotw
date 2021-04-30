@@ -1,6 +1,8 @@
 package game
 
+import "time"
+
 type Judgement struct {
-	Ms   float64
+	Time time.Duration
 	Name string
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"image/color"
+
+	"git.lost.host/meutraa/eott/internal/config"
 )
 
 type DefaultTheme struct {
@@ -11,23 +13,19 @@ type DefaultTheme struct {
 
 func (t *DefaultTheme) RenderMine(column int, denom int) string {
 	r, g, b := getNoteColor(1)
-	return fmt.Sprintf("\033[38;2;%v;%v;%vm%v\033[0m", r, g, b, mineSym)
+	return fmt.Sprintf("\033[38;2;%v;%v;%vm%v\033[0m", r, g, b, *config.MineSym)
 }
 
 func (t *DefaultTheme) RenderNote(column int, denom int) string {
 	r, g, b := getNoteColor(denom)
-	return fmt.Sprintf("\033[38;2;%v;%v;%vm%v\033[0m", r, g, b, noteSym)
+	return fmt.Sprintf("\033[38;2;%v;%v;%vm%v\033[0m", r, g, b, *config.NoteSym)
 }
 
 func (t *DefaultTheme) RenderHitField(column int) string {
-	return barSym
+	return *config.BarSym
 }
 
-const (
-	mineSym = "⨯"
-	noteSym = "⬤"
-	barSym  = "-"
-)
+const ()
 
 var (
 	noteColors = map[int]color.RGBA{

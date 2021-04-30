@@ -5,7 +5,6 @@ go 1.16
 require (
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20210208195552-ff826a37aa15 // indirect
-	github.com/eiannone/keyboard v0.0.0-20200508000154-caf4b762e807
 	github.com/faiface/beep v1.0.2
 	github.com/hajimehoshi/go-mp3 v0.3.2 // indirect
 	github.com/hajimehoshi/oto v0.7.1 // indirect

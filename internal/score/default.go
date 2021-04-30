@@ -125,15 +125,16 @@ func (s *DefaultScorer) Load(c *game.Chart) []History {
 	return histories
 }
 
-func abs(x int64) int64 {
+func abs(x time.Duration) time.Duration {
 	if x < 0 {
 		return -x
 	}
 	return x
 }
 
-func (s *DefaultScorer) Distance(rate float64, n *game.Note, hitTime int64) int64 {
-	return int64(math.Round(float64(n.Ms)/rate)) - hitTime
+// Returns nanoseconds error
+func (s *DefaultScorer) Distance(rate float64, n *game.Note, hitTime time.Duration) time.Duration {
+	return time.Duration(int64(math.Round(float64(n.Time.Nanoseconds())/rate)) - hitTime.Nanoseconds())
 }
 
 func (s *DefaultScorer) ApplyHistoryToChart(ch *game.Chart, history *History) *game.Chart {
@@ -149,15 +150,15 @@ func (s *DefaultScorer) ApplyHistoryToChart(ch *game.Chart, history *History) *g
 		Difficulty: ch.Difficulty,
 	}
 	for _, input := range *history.Inputs {
-		s.ApplyInputToChart(&chart, &input, history.Rate, func(note *game.Note, distance, absDistance float64) {})
+		s.ApplyInputToChart(&chart, &input, history.Rate, func(note *game.Note, distance, absDistance time.Duration) {})
 	}
 	return &chart
 }
 
-func (s *DefaultScorer) ApplyInputToChart(chart *game.Chart, input *game.Input, rate float64, onHit func(note *game.Note, distance, absDistance float64)) {
+func (s *DefaultScorer) ApplyInputToChart(chart *game.Chart, input *game.Input, rate float64, onHit func(note *game.Note, distance, absDistance time.Duration)) {
 	var closestNote *game.Note
-	absDistance := 10000000.0
-	distance := 1000000.0
+	absDistance := time.Hour * 24
+	distance := time.Hour * 24
 
 	for _, note := range chart.Notes {
 		if note.HitTime != 0 || note.IsMine {
@@ -166,10 +167,10 @@ func (s *DefaultScorer) ApplyInputToChart(chart *game.Chart, input *game.Input, 
 		if note.Index != input.Index {
 			continue
 		}
-		dd := s.Distance(rate, note, input.HitTime.Milliseconds())
-		d := math.Abs(float64(dd))
+		dd := s.Distance(rate, note, input.HitTime)
+		d := abs(dd)
 		if d < absDistance {
-			distance = float64(dd)
+			distance = dd
 			absDistance = d
 			closestNote = note
 		} else if nil != closestNote {
@@ -178,24 +179,23 @@ func (s *DefaultScorer) ApplyInputToChart(chart *game.Chart, input *game.Input, 
 		}
 	}
 
-	if nil != closestNote && absDistance < config.MissDistance {
-		closestNote.HitTime = input.HitTime.Milliseconds()
+	if nil != closestNote && absDistance < config.Judgements[len(config.Judgements)-2].Time {
+		closestNote.HitTime = input.HitTime
 		onHit(closestNote, distance, absDistance)
 	}
 }
 
 func (s *DefaultScorer) Score(chart *game.Chart, history *History) Score {
 	var score Score
-	var ms int64
 	ch := s.ApplyHistoryToChart(chart, history)
 	for _, n := range ch.Notes {
 		if n.HitTime == 0 {
-			score.MissCount++
+			if !n.IsMine {
+				score.MissCount++
+			}
 			continue
 		}
-		ms += abs(s.Distance(history.Rate, n, n.HitTime))
+		score.TotalError += abs(s.Distance(history.Rate, n, n.HitTime))
 	}
-
-	score.TotalError = time.Duration(int64(time.Millisecond) * ms)
 	return score
 }

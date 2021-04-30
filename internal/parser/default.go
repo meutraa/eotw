@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"git.lost.host/meutraa/eott/internal/game"
 )
@@ -109,7 +110,7 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 	charts := []*game.Chart{}
 	for _, difficulty := range difficulties {
 		// Start time of first note
-		t := offset
+		seconds := offset
 		var currentBeat float64 = 0.0
 
 		notes := []*game.Note{}
@@ -152,7 +153,7 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 						Index:  col,
 						Denom:  int(denom),
 						IsMine: c == "M",
-						Ms:     int64(t * 1000),
+						Time:     time.Duration(seconds * 1000 * 1000 * 1000),
 					}
 				}
 
@@ -162,7 +163,7 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 					}
 				}
 
-				t += secondsPerNote
+				seconds += secondsPerNote
 				currentBeat += beatsPerNote
 			}
 		}

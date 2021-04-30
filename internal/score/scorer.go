@@ -17,9 +17,9 @@ type Scorer interface {
 	Load(chart *game.Chart) []History
 
 	Score(chart *game.Chart, history *History) Score
-	ApplyInputToChart(chart *game.Chart, input *game.Input, rate float64, onHit func(note *game.Note, distance, absDistance float64))
+	ApplyInputToChart(chart *game.Chart, input *game.Input, rate float64, onHit func(note *game.Note, distance, absDistance time.Duration))
 
-	Distance(rate float64, n *game.Note, hitTime int64) int64
+	Distance(rate float64, n *game.Note, hitTime time.Duration) time.Duration
 }
 
 type History struct {

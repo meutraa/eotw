@@ -1,11 +1,16 @@
 package game
 
+import "time"
+
 type Note struct {
 	Index   int // The chart column
-	Row     int // The current row this note is rendered on, for clearing
 	Denom   int // The beat length, as a denominator, 4 = 1/4 beat
 	IsMine  bool
-	Miss    bool  // Has the note scrolled past the bottom edge of the terminal
-	HitTime int64 // When the note was hit
-	Ms      int64 // The time the note should be hit
+	Time    time.Duration // The time the note should be hit
+	TimeEnd time.Duration // TDurationhe time the note should be unhit
+
+	// This is state
+	Row     int           // The current row this note is rendered on, for clearing
+	HitTime time.Duration // When the note was hit
+	Miss    bool          // Has the note scrolled past the bottom edge of the terminal
 }

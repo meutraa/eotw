@@ -49,7 +49,7 @@ func (r *DefaultRenderer) tickDecorations() {
 	r.decorations = nd
 }
 
-func (r *DefaultRenderer) RenderLoop(delay time.Duration, render func(now, deadline time.Time, duration time.Duration) bool) {
+func (r *DefaultRenderer) RenderLoop(delay time.Duration, render func(startTime time.Time, duration time.Duration) bool) {
 	cont := true
 	startTime := time.Now().Add(delay)
 	for cont {
@@ -57,13 +57,12 @@ func (r *DefaultRenderer) RenderLoop(delay time.Duration, render func(now, deadl
 		duration := now.Sub(startTime)
 		deadline := now.Add(*config.FramePeriod)
 
-		cont = render(now, deadline, duration)
+		cont = render(startTime, duration)
 
 		r.tickDecorations()
 		r.flush()
 
 		remainingTime := deadline.Sub(time.Now())
-		// renderTime := framePeriod.Nanoseconds() - remainingTime.Nanoseconds()
 		time.Sleep(remainingTime)
 	}
 }

@@ -10,7 +10,7 @@ type Renderer interface {
 	Init()
 	Deinit()
 	AddDecoration(col, row int, content string, frames int)
-	RenderLoop(delay time.Duration, render func(now, deadline time.Time, duration time.Duration) bool)
+	RenderLoop(delay time.Duration, render func(startTime time.Time, duration time.Duration) bool)
 	Fill(row, column int, message string)
 	FillColor(row, column int, color color.RGBA, message string)
 }

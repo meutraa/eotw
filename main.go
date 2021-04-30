@@ -1,5 +1,9 @@
 package main
 
+// #include <linux/input-event-codes.h>
+// #include <linux/input.h>
+import "C"
+
 import (
 	"errors"
 	"fmt"
@@ -8,16 +12,15 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"git.lost.host/meutraa/eott/internal/config"
 	"git.lost.host/meutraa/eott/internal/game"
+	"git.lost.host/meutraa/eott/internal/input"
 	"git.lost.host/meutraa/eott/internal/parser"
 	"git.lost.host/meutraa/eott/internal/render"
 	"git.lost.host/meutraa/eott/internal/score"
 	"git.lost.host/meutraa/eott/internal/theme"
-	"github.com/eiannone/keyboard"
 	"github.com/faiface/beep"
 	"github.com/faiface/beep/mp3"
 	"github.com/faiface/beep/speaker"
@@ -39,9 +42,9 @@ func getColumn(nKeys uint8, mc, index int) int {
 	return mc - int(nKeys>>1)*int(*config.ColumnSpacing*2) + index*int(*config.ColumnSpacing*2)
 }
 
-func judge(d float64) (int, *game.Judgement) {
+func judge(d time.Duration) (int, *game.Judgement) {
 	for i, j := range config.Judgements {
-		if d < j.Ms {
+		if d < j.Time {
 			return i, &j
 		}
 	}
@@ -62,15 +65,8 @@ func run() error {
 	}
 	rc, cc := rows, columns
 
-	keyChannel, err := keyboard.GetKeys(128)
-	if nil != err {
-		return fmt.Errorf("unable to open keyboard: %w", err)
-	}
-	defer func() {
-		if err := keyboard.Close(); nil != err {
-			log.Println("unable to close keyboard %w", err)
-		}
-	}()
+	in := make(chan *input.Event, 128)
+	input.ReadInput(*config.Input, in)
 
 	var mp3File, ogg, chartFile string
 
@@ -130,11 +126,12 @@ func run() error {
 		}
 		fmt.Printf("\n")
 	}
-	key := <-keyChannel
-	index, err := strconv.ParseInt(string(key.Rune), 10, 64)
+	// TODO key := <-in
+	/*index, err := strconv.ParseInt(string(key.Rune), 10, 64)
 	if nil != err || index > int64(len(charts)-1) {
 		return err
-	}
+	}*/
+	index := 0
 
 	chart := charts[index]
 
@@ -173,12 +170,10 @@ func run() error {
 		sideCol = 2
 	}
 
-	score := 0.0
+	score, sumOfDistance := time.Millisecond, time.Millisecond
 	counts := make([]int, len(config.Judgements))
-	sumOfDistance := 0.0
-	mean := 0.0
-	totalHits := 0.0
-	stdev := 0.0
+	var mean, stdev float64 = 0.0, 0.0
+	var totalHits uint64 = 0
 	inputs := []game.Input{}
 
 	finished := false
@@ -188,28 +183,39 @@ func run() error {
 		speaker.Play(streamer)
 	}()
 
-	r.RenderLoop(*config.Delay, func(now, deadline time.Time, duration time.Duration) bool {
-		if scorer.Distance(*config.Rate, chart.Notes[len(chart.Notes)-1], duration.Milliseconds()) < 0 {
+	// Render the hit bar
+	for i := 0; i < int(chart.Difficulty.NKeys); i++ {
+		r.Fill(rc-int(*config.BarRow), getColumn(chart.Difficulty.NKeys, mc, i), th.RenderHitField(i))
+	}
+
+	r.RenderLoop(*config.Delay, func(startTime time.Time, duration time.Duration) bool {
+		if scorer.Distance(*config.Rate, chart.Notes[len(chart.Notes)-1], duration) < 0 {
 			finished = true
 			return false
 		}
 
 		// get the key inputs that occured so far
-		for i := 0; i < len(keyChannel); i++ {
-			key := <-keyChannel
-			if key.Key == keyboard.KeyEsc {
+		for i := 0; i < len(in); i++ {
+			ev := <-in
+			if ev.Code == C.KEY_ESC {
 				return false
 			}
 
 			// Which index was hit
-			noteCol := config.KeyColumn(key.Rune, chart.Difficulty.NKeys)
-			if -1 == noteCol {
+			if ev.Released {
+				continue
+			}
+			input := game.Input{
+				Index:   config.KeyColumn(ev.Code, chart.Difficulty.NKeys),
+				HitTime: time.Unix(0, ev.Time.Nano()).Sub(startTime),
+			}
+			if -1 == input.Index {
 				continue // This is not a valid input
 			}
-			input := game.Input{Index: noteCol, HitTime: duration}
+
 			inputs = append(inputs, input)
 
-			scorer.ApplyInputToChart(chart, &input, *config.Rate, func(note *game.Note, distance, absDistance float64) {
+			scorer.ApplyInputToChart(chart, &input, *config.Rate, func(note *game.Note, distance, absDistance time.Duration) {
 				score += absDistance
 				totalHits += 1
 				sumOfDistance += distance
@@ -218,7 +224,7 @@ func run() error {
 				counts[index]++
 				if totalHits > 1 {
 					stdev = 0.0
-					mean = sumOfDistance / totalHits
+					mean = float64(sumOfDistance) / float64(totalHits)
 					for _, n := range chart.Notes {
 						if n.HitTime == 0 {
 							continue
@@ -228,16 +234,11 @@ func run() error {
 						xi2 := xi * xi
 						stdev += xi2
 					}
-					stdev /= (totalHits - 1)
+					stdev /= float64(totalHits - 1)
 					stdev = math.Sqrt(stdev)
 				}
 			})
 
-		}
-
-		// Render the hit bar
-		for i := 0; i < int(chart.Difficulty.NKeys); i++ {
-			r.Fill(rc-int(*config.BarRow), getColumn(chart.Difficulty.NKeys, mc, i), th.RenderHitField(i))
 		}
 
 		// Render notes
@@ -250,7 +251,7 @@ func run() error {
 
 			// Calculate the new row based on time
 			nr := rc - int(*config.BarRow)
-			d := scorer.Distance(*config.Rate, note, duration.Milliseconds())
+			d := scorer.Distance(*config.Rate, note, duration)
 			distance := int(math.Round(float64(d) / config.ScrollSpeed))
 			note.Row = nr - distance
 
@@ -271,11 +272,6 @@ func run() error {
 			}
 		}
 
-		// remainingTime := deadline.Sub(time.Now())
-		// renderTime := framePeriod.Nanoseconds() - remainingTime.Nanoseconds()
-
-		// r.Fill(2, sideCol, fmt.Sprintf("Render Time:  %5.0f µs", float64(renderTime)/1000.0))
-		// r.Fill(3, sideCol, fmt.Sprintf("  Idle Time:  %.1f%%", 100-100*float64(renderTime)/float64(framePeriod.Nanoseconds())))
 		r.Fill(10, sideCol, fmt.Sprintf("   Error dt:  %6v", score))
 		r.Fill(11, sideCol, fmt.Sprintf("      Stdev:  %6.2f", stdev))
 		r.Fill(12, sideCol, fmt.Sprintf("       Mean:  %6.2f", mean))
@@ -292,6 +288,6 @@ func run() error {
 		scorer.Save(chart, &inputs, *config.Rate)
 		log.Println("saved")
 	}
-	_ = <-keyChannel
+	_, _ = <-in, <-in
 	return nil
 }
