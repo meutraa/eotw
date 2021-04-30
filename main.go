@@ -220,7 +220,7 @@ func run() error {
 				totalHits += 1
 				sumOfDistance += distance
 				// because distance is < missDistance, this should never be nil
-				index, _ := judge(distance)
+				index, _ := judge(absDistance)
 				counts[index]++
 				if totalHits > 1 {
 					stdev = 0.0
