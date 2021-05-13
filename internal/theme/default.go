@@ -11,21 +11,19 @@ import (
 type DefaultTheme struct {
 }
 
-func (t *DefaultTheme) RenderMine(column int, denom int) string {
+func (t *DefaultTheme) RenderMine(column uint16, denom int) string {
 	r, g, b := getNoteColor(1)
 	return fmt.Sprintf("\033[38;2;%v;%v;%vm%v\033[0m", r, g, b, *config.MineSym)
 }
 
-func (t *DefaultTheme) RenderNote(column int, denom int) string {
+func (t *DefaultTheme) RenderNote(column uint16, denom int) string {
 	r, g, b := getNoteColor(denom)
 	return fmt.Sprintf("\033[38;2;%v;%v;%vm%v\033[0m", r, g, b, *config.NoteSym)
 }
 
-func (t *DefaultTheme) RenderHitField(column int) string {
+func (t *DefaultTheme) RenderHitField(index uint8) string {
 	return *config.BarSym
 }
-
-const ()
 
 var (
 	noteColors = map[int]color.RGBA{

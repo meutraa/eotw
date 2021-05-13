@@ -142,7 +142,7 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 				denom := r.Denom().Int64()
 				_, secondsPerNote := p.getSecondsPerNote(bpms, currentBeat, beatsPerNote)
 
-				createNote := func(col int, c string) *game.Note {
+				createNote := func(index uint8, c string) *game.Note {
 					// log.Printf("(%v) %v/%v = %v%vth\033[0m", bpm, i, lineCount, (denom), denom)
 					if c == "M" {
 						mineCount++
@@ -150,16 +150,16 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 						noteCount++
 					}
 					return &game.Note{
-						Index:  col,
+						Index:  index,
 						Denom:  int(denom),
 						IsMine: c == "M",
-						Time:     time.Duration(seconds * 1000 * 1000 * 1000),
+						Time:   time.Duration(seconds * 1000 * 1000 * 1000),
 					}
 				}
 
 				for i, c := range chs {
 					if p.mapToNote(c) {
-						notes = append(notes, createNote(i, string(c)))
+						notes = append(notes, createNote(uint8(i), string(c)))
 					}
 				}
 

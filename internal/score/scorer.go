@@ -11,21 +11,21 @@ type Scorer interface {
 	Deinit()
 
 	// Save the state of this performance
-	Save(chart *game.Chart, inputs *[]game.Input, rate float64)
+	Save(chart *game.Chart, inputs *[]game.Input, rate uint16)
 
 	// Load up previous state for the chart
 	Load(chart *game.Chart) []History
 
 	Score(chart *game.Chart, history *History) Score
-	ApplyInputToChart(chart *game.Chart, input *game.Input, rate float64, onHit func(note *game.Note, distance, absDistance time.Duration))
+	ApplyInputToChart(chart *game.Chart, input *game.Input, rate uint16) (note *game.Note, distance, absDistance time.Duration)
 
-	Distance(rate float64, n *game.Note, hitTime time.Duration) time.Duration
+	Distance(rate uint16, expected, actual time.Duration) time.Duration
 }
 
 type History struct {
 	Sum    string
 	Inputs *[]game.Input
-	Rate   float64
+	Rate   uint16
 }
 
 type Score struct {

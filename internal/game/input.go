@@ -3,6 +3,6 @@ package game
 import "time"
 
 type Input struct {
-	Index   int // game column index
+	Index   uint8 // game column index
 	HitTime time.Duration
 }

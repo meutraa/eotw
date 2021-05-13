@@ -1,7 +1,7 @@
 package theme
 
 type Theme interface {
-	RenderMine(column int, denom int) string
-	RenderNote(column int, denom int) string
-	RenderHitField(column int) string
+	RenderMine(column uint16, denom int) string
+	RenderNote(column uint16, denom int) string
+	RenderHitField(index uint8) string
 }
