@@ -134,12 +134,7 @@ func abs(x time.Duration) time.Duration {
 	return x
 }
 
-var DistanceCount uint64 = 0
-
-// Returns nanoseconds error
-// I tested this, and the difference between using floats is never more than 1ns
 func (s *DefaultScorer) Distance(rate uint16, expected, actual time.Duration) time.Duration {
-	// DistanceCount++
 	return time.Duration(expected*100/time.Duration(rate)) - actual
 }
 

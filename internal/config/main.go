@@ -25,7 +25,7 @@ var (
 	keys4               = kingpin.Flag("keys-single", "Keys for 4k").Default("12,40,17,50").Short('k').String()
 	keys6               = kingpin.Flag("keys-solo", "Keys for 6k").Default("23,18,24,20,31,46").String()
 	keys8               = kingpin.Flag("keys-double", "Keys for 8k").Default("23,18,24,49,35,20,31,46").String()
-	BarRow              = kingpin.Flag("bar-row", "Console row to render hit bar").Default("8").Uint16()
+	BarOffsetFromBottom              = kingpin.Flag("bar-row", "Console row to render hit bar").Default("8").Uint16()
 	BarSym              = kingpin.Flag("bar-decoration", "Decoration at the hitfield").Default("\033[2m\033[1D[ ]").String()
 	NoteSym             = kingpin.Flag("note-symbol", "Restricted to 1 column").Default("⬤").String()
 	MineSym             = kingpin.Flag("mine-symbol", "Restricted to 1 column").Default("⨯").String()

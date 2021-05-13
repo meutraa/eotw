@@ -62,3 +62,33 @@ Duration: 1.62mins, Total samples = 9.43s ( 9.68%)
      0.10s  1.06% 55.46%      0.10s  1.06%  runtime.read
      0.10s  1.06% 56.52%      0.13s  1.38%  sync.(*Pool).Get
      0.09s  0.95% 57.48%      0.69s  7.32%  fmt.(*pp).printArg
+
+Showing nodes accounting for 4520ms, 59.01% of 7660ms total
+Dropped 150 nodes (cum <= 38.30ms)
+Showing top 25 nodes out of 174
+      flat  flat%   sum%        cum   cum%
+     490ms  6.40%  6.40%      490ms  6.40%  runtime.futex
+     490ms  6.40% 12.79%      540ms  7.05%  syscall.Syscall
+     360ms  4.70% 17.49%     1780ms 23.24%  runtime.findrunnable
+     240ms  3.13% 20.63%      260ms  3.39%  github.com/jfreymuth/vorbis.imdct
+     230ms  3.00% 23.63%      540ms  7.05%  github.com/jfreymuth/vorbis.(*residue).Decode
+     210ms  2.74% 26.37%      310ms  4.05%  github.com/jfreymuth/vorbis.huffmanCode.Lookup (inline)
+     190ms  2.48% 28.85%      570ms  7.44%  fmt.(*pp).printArg
+     180ms  2.35% 31.20%      180ms  2.35%  <unknown>
+     180ms  2.35% 33.55%      180ms  2.35%  runtime.memclrNoHeapPointers
+     160ms  2.09% 35.64%      160ms  2.09%  runtime.madvise
+     150ms  1.96% 37.60%      150ms  1.96%  runtime.cgocall
+     140ms  1.83% 39.43%     1400ms 18.28%  github.com/jfreymuth/oggvorbis.(*Reader).Read
+     140ms  1.83% 41.25%     1230ms 16.06%  github.com/jfreymuth/vorbis.(*Decoder).decodePacket
+     140ms  1.83% 43.08%      140ms  1.83%  runtime.epollwait
+     140ms  1.83% 44.91%      140ms  1.83%  runtime.nextFreeFast (inline)
+     130ms  1.70% 46.61%      130ms  1.70%  runtime.(*randomEnum).next (inline)
+     130ms  1.70% 48.30%      130ms  1.70%  runtime.memmove
+     120ms  1.57% 49.87%      280ms  3.66%  runtime.checkTimers
+     120ms  1.57% 51.44%      190ms  2.48%  runtime.scanobject
+     100ms  1.31% 52.74%      690ms  9.01%  fmt.(*pp).doPrintf
+     100ms  1.31% 54.05%      290ms  3.79%  github.com/hajimehoshi/oto/internal/mux.(*Mux).Read
+     100ms  1.31% 55.35%      100ms  1.31%  github.com/jfreymuth/vorbis.(*bitReader).Read1 (inline)
+     100ms  1.31% 56.66%      650ms  8.49%  runtime.mallocgc
+     100ms  1.31% 57.96%      100ms  1.31%  runtime.read
+      80ms  1.04% 59.01%      130ms  1.70%  fmt.(*fmt).fmtInteger

@@ -78,8 +78,9 @@ func run() error {
 	if nil != err {
 		return fmt.Errorf("unable to get terminal size: %w", err)
 	}
-	rowCount, columnCount := uint16(_rows), uint16(_columns)
-	middleColumn, middleRow := columnCount>>1, rowCount>>1
+	totalRows, columnCount := uint16(_rows), uint16(_columns)
+	middleColumn, middleRow := columnCount>>1, totalRows>>1
+	hitRow := totalRows - *config.BarOffsetFromBottom
 
 	in := make(chan *input.Event, 128)
 	input.ReadInput(*config.Input, in)
@@ -198,7 +199,7 @@ func run() error {
 
 	// Render the hit bar
 	for i := uint8(0); i < chart.Difficulty.NKeys; i++ {
-		r.Fill(rowCount-*config.BarRow, getColumn(chart.Difficulty.NKeys, middleColumn, i), th.RenderHitField(i))
+		r.Fill(totalRows-*config.BarOffsetFromBottom, getColumn(chart.Difficulty.NKeys, middleColumn, i), th.RenderHitField(i))
 	}
 
 	lastNote := chart.Notes[len(chart.Notes)-1]
@@ -232,7 +233,7 @@ func run() error {
 			inputs = append(inputs, input)
 			// Get the column to render the hit splash at
 			col := getColumn(chart.Difficulty.NKeys, middleColumn, input.Index)
-			r.AddDecoration(col, rowCount-*config.BarRow, "*", 120)
+			r.AddDecoration(col, totalRows-*config.BarOffsetFromBottom, "*", 120)
 
 			note, distance, abs := scorer.ApplyInputToChart(chart, &input, *config.Rate)
 			if note == nil {
@@ -264,25 +265,57 @@ func run() error {
 			}
 		}
 
+		// Adjust the active note range
+		// The first time this is called, the active slice is empty
+		// and start, end = 0, 0
+		active, start, end := chart.Active()
+		startOffset := 0
+		endOffset := 0
+
 		// Render notes
-		for _, note := range chart.Notes {
-			// clear all existing renders
+		for _, note := range active {
+			// Clear all existing notes
 			col := getColumn(chart.Difficulty.NKeys, middleColumn, note.Index)
-			if note.Visible() {
-				r.Fill(note.Row, col, " ")
-			}
+
+			// rowCount = 60 = bottom of screen
+			// BarRow = 8 = 8 from bottom of screen
+			// nr = hitRow
 
 			// Calculate the new row based on time
-			nr := rowCount - *config.BarRow
+
 			// This is the main use of the Distance function
 			d := scorer.Distance(*config.Rate, note.Time, duration)
-			row := int64(float64(d) * config.NsToRow)
+
+			rowOffsetFromHitRow := int64(float64(d) * config.NsToRow)
 
 			// Check if this note will be rendered
-			if row > int64(rowCount-*config.BarRow) || row < -int64(*config.BarRow) {
+			if rowOffsetFromHitRow > int64(hitRow) {
+				// This is too far in the future and off the top of the screen
+				log.Fatalln("Active note should not be active: top")
+			} else if rowOffsetFromHitRow < -int64(*config.BarOffsetFromBottom) {
+				// This is scrolled past the bottom of the screen
+
+				// Mark the active window to slide forward 1
+				startOffset++
+				// Mark the render loop to clear this note
+				r.Fill(note.Row, col, " ")
+				// TODO: probably do not need this anymore
 				note.Row = math.MaxUint16
 			} else {
-				note.Row = nr - uint16(row)
+				// This is still an active note
+				renderRow := hitRow - uint16(rowOffsetFromHitRow)
+
+				// Only if this has changed position do we clear and render anew
+				if note.Row != renderRow && note.HitTime == 0 {
+					// TODO: there might be an optimization here
+					r.Fill(note.Row, col, " ")
+					note.Row = renderRow
+					if note.IsMine {
+						r.Fill(note.Row, col, th.RenderMine(col, note.Denom))
+					} else {
+						r.Fill(note.Row, col, th.RenderNote(col, note.Denom))
+					}
+				}
 			}
 
 			// Is this row within the playing field?
@@ -293,20 +326,31 @@ func run() error {
 				r.AddDecoration(col+1, middleRow-1, "\033[1;31m╮", 240)
 				r.AddDecoration(col-1, middleRow, "\033[1;31m╰", 240)
 				r.AddDecoration(col+1, middleRow, "\033[1;31m╯", 240)
-			} else if note.Visible() && note.HitTime == 0 {
-				if note.IsMine {
-					r.Fill(note.Row, col, th.RenderMine(col, note.Denom))
-				} else {
-					r.Fill(note.Row, col, th.RenderNote(col, note.Denom))
-				}
 			}
 		}
+
+		// At the end of this render loop I want to see which notes will require rendering next frame and slide the window
+		for _, note := range chart.Notes[end:] {
+			d := scorer.Distance(*config.Rate, note.Time, duration)
+			rowOffsetFromHitRow := int64(float64(d) * config.NsToRow)
+
+			// Check if this note will be rendered
+			if rowOffsetFromHitRow < int64(hitRow) {
+				endOffset++
+			} else {
+				break
+			}
+		}
+
+		// Update the sliding window
+		chart.SetActive(start+startOffset, end+endOffset)
 
 		r.Fill(10, sideCol, fmt.Sprintf("   Error dt:  %6v", distanceError))
 		r.Fill(11, sideCol, fmt.Sprintf("      Stdev:  %6.2f", stdev))
 		r.Fill(12, sideCol, fmt.Sprintf("       Mean:  %6.2f", mean))
 		r.Fill(13, sideCol, fmt.Sprintf("      Total:  %6v", chart.NoteCount))
 		r.Fill(14, sideCol, fmt.Sprintf("      Mines:  %6v", chart.MineCount))
+		// r.Fill(15, sideCol, fmt.Sprintf("     Window:  %v - %v (%v)", start, end, len(active)))
 		for i, judgement := range config.Judgements {
 			r.Fill(uint16(18+i), sideCol, fmt.Sprintf("%v:  %6v", judgement.Name, counts[i]))
 		}
@@ -318,7 +362,6 @@ func run() error {
 		scorer.Save(chart, &inputs, *config.Rate)
 		log.Println("saved")
 	}
-	log.Println("Called distance:", score.DistanceCount)
 	_, _ = <-in, <-in
 	return nil
 }
