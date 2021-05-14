@@ -194,21 +194,6 @@ func run() error {
 	var totalHits uint64 = 0
 	inputs := []game.Input{}
 
-	finished := false
-
-	go func() {
-		time.Sleep(*config.Delay + *config.Offset)
-		speaker.Play(streamer)
-		song := buffer.Streamer(0, buffer.Len())
-		speaker.Play(song)
-		for {
-			if song.Position() == song.Len() {
-				quitChannel <- os.Interrupt
-			}
-			time.Sleep(time.Second)
-		}
-	}()
-
 	// Render the hit bar
 	for i := uint8(0); i < chart.Difficulty.NKeys; i++ {
 		r.Fill(totalRows-*config.BarOffsetFromBottom, getColumn(chart.Difficulty.NKeys, middleColumn, i), th.RenderHitField(i))
@@ -225,7 +210,19 @@ func run() error {
 		r.Fill(uint16(18+i), sideCol, judgement.Name+":  ")
 	}
 
-	// I do not care about all the above, it is instantish
+	go func() {
+		time.Sleep(*config.Delay + *config.Offset)
+		song := buffer.Streamer(0, buffer.Len())
+		speaker.Play(song)
+		for {
+			if song.Position() == song.Len() {
+				quitChannel <- os.Interrupt
+			}
+			time.Sleep(time.Second)
+		}
+	}()
+
+	// I do not care about all the above, it does not affect gameplay
 	if *config.CpuProfile != "" {
 		f, err := os.Create(*config.CpuProfile)
 		if err != nil {
@@ -237,9 +234,7 @@ func run() error {
 
 	r.RenderLoop(*config.Delay,
 		func(startTime time.Time, duration time.Duration) bool {
-			// This fails if the last note is not meant to be hit
 			if len(quitChannel) != 0 {
-				finished = true
 				return false
 			}
 
@@ -338,10 +333,10 @@ func run() error {
 						eidx := len(counts) - 1
 						counts[eidx] += 1
 						r.Fill(uint16(18+eidx), sideColData, fmt.Sprintf("%6v", counts[eidx]))
-						r.AddDecoration(col-1, middleRow-1, "\033[1;31m╭", 240)
-						r.AddDecoration(col+1, middleRow-1, "\033[1;31m╮", 240)
-						r.AddDecoration(col-1, middleRow, "\033[1;31m╰", 240)
-						r.AddDecoration(col+1, middleRow, "\033[1;31m╯", 240)
+						r.AddDecoration(col-1, middleRow-1, "\033[1;31m╭\033[0m", 240)
+						r.AddDecoration(col+1, middleRow-1, "\033[1;31m╮\033[0m", 240)
+						r.AddDecoration(col-1, middleRow, "\033[1;31m╰\033[0m", 240)
+						r.AddDecoration(col+1, middleRow, "\033[1;31m╯\033[0m", 240)
 					}
 
 					// Mark the active window to slide forward 1
@@ -401,10 +396,6 @@ func run() error {
 		},
 	)
 
-	if finished && len(quitChannel) == 0 {
-		scorer.Save(chart, &inputs, *config.Rate)
-		log.Println("saved")
-		_, _ = <-in, <-in
-	}
+	scorer.Save(chart, &inputs, *config.Rate)
 	return nil
 }

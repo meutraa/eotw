@@ -152,3 +152,33 @@ Showing top 25 nodes out of 172
       40ms  1.01% 65.32%       40ms  1.01%  github.com/jfreymuth/oggvorbis.crcUpdate
       40ms  1.01% 66.33%       40ms  1.01%  github.com/jfreymuth/vorbis.renderLine
       40ms  1.01% 67.34%       40ms  1.01%  runtime.memclrNoHeapPointers
+
+Showing nodes accounting for 2020ms, 68.71% of 2940ms total
+Dropped 53 nodes (cum <= 14.70ms)
+Showing top 25 nodes out of 126
+      flat  flat%   sum%        cum   cum%
+     450ms 15.31% 15.31%      450ms 15.31%  runtime.futex
+     230ms  7.82% 23.13%      230ms  7.82%  [libspa-audioconvert.so]
+     190ms  6.46% 29.59%      890ms 30.27%  runtime.findrunnable
+     110ms  3.74% 33.33%      130ms  4.42%  runtime.cgocall
+     100ms  3.40% 36.73%      320ms 10.88%  github.com/hajimehoshi/oto/internal/mux.(*Mux).Read
+      90ms  3.06% 39.80%      300ms 10.20%  github.com/faiface/beep.signedToFloat
+      90ms  3.06% 42.86%      120ms  4.08%  math.ldexp
+      80ms  2.72% 45.58%       90ms  3.06%  runtime.nanotime (inline)
+      70ms  2.38% 47.96%       70ms  2.38%  [libpthread-2.32.so]
+      70ms  2.38% 50.34%      190ms  6.46%  math.expmulti
+      60ms  2.04% 52.38%       60ms  2.04%  runtime.pMask.read (inline)
+      60ms  2.04% 54.42%       70ms  2.38%  syscall.Syscall
+      50ms  1.70% 56.12%      370ms 12.59%  github.com/faiface/beep.Format.decode
+      40ms  1.36% 57.48%       40ms  1.36%  runtime.(*randomEnum).done (inline)
+      30ms  1.02% 58.50%       30ms  1.02%  [libc-2.32.so]
+      30ms  1.02% 59.52%      550ms 18.71%  github.com/faiface/beep/speaker.update
+      30ms  1.02% 60.54%       30ms  1.02%  math.IsInf (inline)
+      30ms  1.02% 61.56%       30ms  1.02%  runtime.(*guintptr).cas (inline)
+      30ms  1.02% 62.59%      200ms  6.80%  runtime.checkTimers
+      30ms  1.02% 63.61%       30ms  1.02%  runtime.dodeltimer0
+      30ms  1.02% 64.63%       30ms  1.02%  runtime.epollwait
+      30ms  1.02% 65.65%       30ms  1.02%  runtime.execute
+      30ms  1.02% 66.67%       40ms  1.36%  runtime.lock2
+      30ms  1.02% 67.69%       70ms  2.38%  runtime.netpoll
+      30ms  1.02% 68.71%     1190ms 40.48%  runtime.schedule
