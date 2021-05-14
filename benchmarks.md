@@ -92,3 +92,63 @@ Showing top 25 nodes out of 174
      100ms  1.31% 56.66%      650ms  8.49%  runtime.mallocgc
      100ms  1.31% 57.96%      100ms  1.31%  runtime.read
       80ms  1.04% 59.01%      130ms  1.70%  fmt.(*fmt).fmtInteger
+
+Showing nodes accounting for 2680ms, 68.37% of 3920ms total
+Dropped 70 nodes (cum <= 19.60ms)
+Showing top 25 nodes out of 172
+      flat  flat%   sum%        cum   cum%
+     400ms 10.20% 10.20%      400ms 10.20%  runtime.futex
+     260ms  6.63% 16.84%      430ms 10.97%  github.com/jfreymuth/vorbis.(*residue).Decode
+     250ms  6.38% 23.21%      970ms 24.74%  runtime.findrunnable
+     140ms  3.57% 26.79%      140ms  3.57%  <unknown>
+     130ms  3.32% 30.10%      140ms  3.57%  github.com/jfreymuth/vorbis.imdct
+     130ms  3.32% 33.42%      140ms  3.57%  syscall.Syscall
+     120ms  3.06% 36.48%      120ms  3.06%  runtime.nanotime (inline)
+     120ms  3.06% 39.54%      120ms  3.06%  runtime.unlock2
+     100ms  2.55% 42.09%      300ms  7.65%  github.com/hajimehoshi/oto/internal/mux.(*Mux).Read
+     100ms  2.55% 44.64%     1010ms 25.77%  github.com/jfreymuth/oggvorbis.(*Reader).Read
+      90ms  2.30% 46.94%       90ms  2.30%  [libpthread-2.32.so]
+      90ms  2.30% 49.23%      170ms  4.34%  github.com/jfreymuth/vorbis.huffmanCode.Lookup (inline)
+      90ms  2.30% 51.53%      120ms  3.06%  runtime.cgocall
+      80ms  2.04% 53.57%       80ms  2.04%  github.com/jfreymuth/vorbis.(*bitReader).Read1 (inline)
+      70ms  1.79% 55.36%      880ms 22.45%  github.com/jfreymuth/vorbis.(*Decoder).decodePacket
+      70ms  1.79% 57.14%      260ms  6.63%  runtime.checkTimers
+      60ms  1.53% 58.67%       60ms  1.53%  github.com/jfreymuth/vorbis.(*Decoder).inverseCoupling
+      50ms  1.28% 59.95%     1090ms 27.81%  github.com/faiface/beep.(*Mixer).Stream
+      50ms  1.28% 61.22%       50ms  1.28%  runtime.(*randomEnum).next (inline)
+      50ms  1.28% 62.50%       50ms  1.28%  runtime.lock2
+      50ms  1.28% 63.78%       50ms  1.28%  runtime.madvise
+      50ms  1.28% 65.05%       50ms  1.28%  runtime.memclrNoHeapPointers
+      50ms  1.28% 66.33%       50ms  1.28%  runtime.read
+      40ms  1.02% 67.35%     1250ms 31.89%  github.com/faiface/beep/speaker.update
+      40ms  1.02% 68.37%       40ms  1.02%  runtime.epollwait
+
+      Showing nodes accounting for 2660ms, 67.34% of 3950ms total
+Dropped 76 nodes (cum <= 19.75ms)
+Showing top 25 nodes out of 172
+      flat  flat%   sum%        cum   cum%
+     470ms 11.90% 11.90%      470ms 11.90%  runtime.futex
+     260ms  6.58% 18.48%      260ms  6.58%  [libspa-audioconvert.so]
+     210ms  5.32% 23.80%      210ms  5.32%  [libpthread-2.32.so]
+     180ms  4.56% 28.35%      180ms  4.56%  github.com/jfreymuth/vorbis.imdct
+     150ms  3.80% 32.15%      920ms 23.29%  runtime.findrunnable
+     120ms  3.04% 35.19%      870ms 22.03%  github.com/jfreymuth/oggvorbis.(*Reader).Read
+     110ms  2.78% 37.97%      420ms 10.63%  github.com/hajimehoshi/oto/internal/mux.(*Mux).Read
+     100ms  2.53% 40.51%      670ms 16.96%  github.com/jfreymuth/vorbis.(*Decoder).decodePacket
+      90ms  2.28% 42.78%      110ms  2.78%  syscall.Syscall
+      80ms  2.03% 44.81%      140ms  3.54%  github.com/jfreymuth/vorbis.huffmanCode.Lookup (inline)
+      80ms  2.03% 46.84%       80ms  2.03%  runtime.(*randomEnum).next (inline)
+      80ms  2.03% 48.86%      100ms  2.53%  runtime.lock2
+      80ms  2.03% 50.89%       80ms  2.03%  runtime.nanotime (inline)
+      70ms  1.77% 52.66%      210ms  5.32%  github.com/jfreymuth/vorbis.(*residue).Decode
+      70ms  1.77% 54.43%      120ms  3.04%  runtime.cgocall
+      70ms  1.77% 56.20%      100ms  2.53%  runtime.scanobject
+      60ms  1.52% 57.72%       60ms  1.52%  github.com/jfreymuth/vorbis.(*Decoder).inverseCoupling
+      60ms  1.52% 59.24%       60ms  1.52%  github.com/jfreymuth/vorbis.(*bitReader).Read1 (inline)
+      50ms  1.27% 60.51%       50ms  1.27%  [libc-2.32.so]
+      50ms  1.27% 61.77%       50ms  1.27%  runtime.epollwait
+      50ms  1.27% 63.04%       50ms  1.27%  runtime.madvise
+      50ms  1.27% 64.30%       50ms  1.27%  runtime.runqgrab
+      40ms  1.01% 65.32%       40ms  1.01%  github.com/jfreymuth/oggvorbis.crcUpdate
+      40ms  1.01% 66.33%       40ms  1.01%  github.com/jfreymuth/vorbis.renderLine
+      40ms  1.01% 67.34%       40ms  1.01%  runtime.memclrNoHeapPointers

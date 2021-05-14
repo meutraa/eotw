@@ -10,6 +10,7 @@ require (
 	github.com/hajimehoshi/oto v0.7.1 // indirect
 	github.com/mattn/go-sqlite3 v1.14.7
 	github.com/pkg/errors v0.9.1 // indirect
+	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
 	golang.org/x/exp v0.0.0-20210417010653-0739314eea07 // indirect
 	golang.org/x/image v0.0.0-20210220032944-ac19c3e999fb // indirect
 	golang.org/x/mobile v0.0.0-20210220033013-bdb1ca9a1e08 // indirect

@@ -1,7 +1,6 @@
 package game
 
 import (
-	"math"
 	"time"
 )
 
@@ -15,9 +14,4 @@ type Note struct {
 	// This is state
 	Row     uint16        // The current row this note is rendered on, for clearing
 	HitTime time.Duration // When the note was hit
-	Miss    bool          // Has the note scrolled past the bottom edge of the terminal
-}
-
-func (note *Note) Visible() bool {
-	return note.Row != math.MaxUint16
 }

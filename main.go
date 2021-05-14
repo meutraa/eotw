@@ -10,9 +10,11 @@ import (
 	"log"
 	"math"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"runtime/pprof"
+	"strconv"
 	"time"
 
 	"git.lost.host/meutraa/eott/internal/config"
@@ -33,15 +35,6 @@ import (
 
 func main() {
 	config.Init()
-	if *config.CpuProfile != "" {
-		f, err := os.Create(*config.CpuProfile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
 	if err := run(); nil != err {
 		log.Fatalln(err)
 	}
@@ -74,6 +67,12 @@ func run() error {
 	var psr parser.Parser = &parser.DefaultParser{}
 	var scorer score.Scorer = &score.DefaultScorer{}
 
+	var totalFrameCounter, totalRenderDuration uint64 = 0, 0
+
+	quitChannel := make(chan os.Signal, 1)
+	signal.Notify(quitChannel, os.Interrupt)
+
+	// Get the dimensions of the terminal
 	_columns, _rows, err := term.GetSize(int(os.Stdout.Fd()))
 	if nil != err {
 		return fmt.Errorf("unable to get terminal size: %w", err)
@@ -82,6 +81,7 @@ func run() error {
 	middleColumn, middleRow := columnCount>>1, totalRows>>1
 	hitRow := totalRows - *config.BarOffsetFromBottom
 
+	// Start reading keyboard input
 	in := make(chan *input.Event, 128)
 	input.ReadInput(*config.Input, in)
 
@@ -168,7 +168,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer streamer.Close()
+
+	buffer := beep.NewBuffer(format)
+	buffer.Append(streamer)
+	streamer.Close()
 
 	speaker.Init(beep.SampleRate(math.Round(0.01*float64(format.SampleRate)*float64(*config.Rate))), format.SampleRate.N(time.Second/60))
 
@@ -183,6 +186,7 @@ func run() error {
 	if sideCol < 2 {
 		sideCol = 2
 	}
+	sideColData := 14 + sideCol
 
 	distanceError, sumOfDistance := time.Millisecond, time.Millisecond
 	counts := make([]int, len(config.Judgements))
@@ -195,6 +199,14 @@ func run() error {
 	go func() {
 		time.Sleep(*config.Delay + *config.Offset)
 		speaker.Play(streamer)
+		song := buffer.Streamer(0, buffer.Len())
+		speaker.Play(song)
+		for {
+			if song.Position() == song.Len() {
+				quitChannel <- os.Interrupt
+			}
+			time.Sleep(time.Second)
+		}
 	}()
 
 	// Render the hit bar
@@ -202,166 +214,197 @@ func run() error {
 		r.Fill(totalRows-*config.BarOffsetFromBottom, getColumn(chart.Difficulty.NKeys, middleColumn, i), th.RenderHitField(i))
 	}
 
-	lastNote := chart.Notes[len(chart.Notes)-1]
-	r.RenderLoop(*config.Delay, func(startTime time.Time, duration time.Duration) bool {
-		// This fails if the last note is not meant to be hit
-		if lastNote.Miss || lastNote.HitTime != 0 {
-			finished = true
-			return false
-		}
+	// Render the static stat ui
+	r.Fill(3, sideCol, "     Render:  ")
+	r.Fill(10, sideCol, "   Error dt:  ")
+	r.Fill(11, sideCol, "      Stdev:  ")
+	r.Fill(12, sideCol, "       Mean:  ")
+	r.Fill(13, sideCol, fmt.Sprintf("      Total:  %6v", chart.NoteCount))
+	r.Fill(14, sideCol, fmt.Sprintf("      Mines:  %6v", chart.MineCount))
+	for i, judgement := range config.Judgements {
+		r.Fill(uint16(18+i), sideCol, judgement.Name+":  ")
+	}
 
-		// get the key inputs that occured so far
-		for i := 0; i < len(in); i++ {
-			ev := <-in
-			if ev.Code == C.KEY_ESC {
+	// I do not care about all the above, it is instantish
+	if *config.CpuProfile != "" {
+		f, err := os.Create(*config.CpuProfile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
+	r.RenderLoop(*config.Delay,
+		func(startTime time.Time, duration time.Duration) bool {
+			// This fails if the last note is not meant to be hit
+			if len(quitChannel) != 0 {
+				finished = true
 				return false
 			}
 
-			// Which index was hit
-			if ev.Released {
-				continue
-			}
-			index, err := config.KeyColumn(ev.Code, chart.Difficulty.NKeys)
-			if nil != err {
-				continue
-			}
-			input := game.Input{
-				Index:   index,
-				HitTime: time.Unix(0, ev.Time.Nano()).Sub(startTime),
-			}
-
-			inputs = append(inputs, input)
-			// Get the column to render the hit splash at
-			col := getColumn(chart.Difficulty.NKeys, middleColumn, input.Index)
-			r.AddDecoration(col, totalRows-*config.BarOffsetFromBottom, "*", 120)
-
-			note, distance, abs := scorer.ApplyInputToChart(chart, &input, *config.Rate)
-			if note == nil {
-				continue
-			}
-
-			distanceError += abs
-			totalHits += 1
-			sumOfDistance += distance
-			// because distance is < missDistance, this should never be nil
-			idx, judgement := judge(abs)
-			r.AddDecoration(middleColumn, middleRow, judgement.Name, 120)
-
-			counts[idx]++
-			if totalHits > 1 {
-				stdev = 0.0
-				mean = float64(sumOfDistance) / float64(totalHits)
-				for _, n := range chart.Notes {
-					if n.HitTime == 0 {
-						continue
-					}
-					diff := scorer.Distance(*config.Rate, n.Time, n.HitTime)
-					xi := float64(diff) - mean
-					xi2 := xi * xi
-					stdev += xi2
+			// get the key inputs that occured so far
+			for i := 0; i < len(in); i++ {
+				ev := <-in
+				if ev.Code == C.KEY_ESC {
+					return false
 				}
-				stdev /= float64(totalHits - 1)
-				stdev = math.Sqrt(stdev)
+
+				// Which index was hit
+				if ev.Released {
+					continue
+				}
+				index, err := config.KeyColumn(ev.Code, chart.Difficulty.NKeys)
+				if nil != err {
+					continue
+				}
+				input := game.Input{
+					Index:   index,
+					HitTime: time.Unix(0, ev.Time.Nano()).Sub(startTime),
+				}
+
+				inputs = append(inputs, input)
+				// Get the column to render the hit splash at
+				col := getColumn(chart.Difficulty.NKeys, middleColumn, input.Index)
+				r.AddDecoration(col, totalRows-*config.BarOffsetFromBottom, "*", 120)
+
+				note, distance, abs := scorer.ApplyInputToChart(chart, &input, *config.Rate)
+				if note == nil {
+					continue
+				}
+
+				distanceError += abs
+				totalHits += 1
+				sumOfDistance += distance
+				// because distance is < missDistance, this should never be nil
+				idx, judgement := judge(abs)
+				r.AddDecoration(middleColumn, middleRow, judgement.Name, 120)
+
+				counts[idx]++
+				if totalHits > 1 {
+					stdev = 0.0
+					mean = float64(sumOfDistance) / float64(totalHits)
+					for _, n := range chart.Notes {
+						if n.HitTime == 0 {
+							continue
+						}
+						diff := scorer.Distance(*config.Rate, n.Time, n.HitTime)
+						xi := float64(diff) - mean
+						xi2 := xi * xi
+						stdev += xi2
+					}
+					stdev /= float64(totalHits - 1)
+					stdev = math.Sqrt(stdev)
+				}
+
+				// Update stats
+				r.Fill(10, sideColData, fmt.Sprintf("%6.0f ms", float64(distanceError)/float64(time.Millisecond)))
+				r.Fill(11, sideColData, fmt.Sprintf("%6.2f ms", stdev/float64(time.Millisecond)))
+				r.Fill(12, sideColData, fmt.Sprintf("%6.2f ms", mean/float64(time.Millisecond)))
+				r.Fill(uint16(18+idx), sideColData, fmt.Sprintf("%6v", counts[idx]))
 			}
-		}
 
-		// Adjust the active note range
-		// The first time this is called, the active slice is empty
-		// and start, end = 0, 0
-		active, start, end := chart.Active()
-		startOffset := 0
-		endOffset := 0
+			// Adjust the active note range
+			// The first time this is called, the active slice is empty
+			// and start, end = 0, 0
+			active, start, end := chart.Active()
+			startOffset := 0
+			endOffset := 0
 
-		// Render notes
-		for _, note := range active {
-			// Clear all existing notes
-			col := getColumn(chart.Difficulty.NKeys, middleColumn, note.Index)
+			// Render notes
+			for _, note := range active {
+				col := getColumn(chart.Difficulty.NKeys, middleColumn, note.Index)
 
-			// rowCount = 60 = bottom of screen
-			// BarRow = 8 = 8 from bottom of screen
-			// nr = hitRow
+				// rowCount = 60 = bottom of screen
+				// BarRow = 8 = 8 from bottom of screen
+				// nr = hitRow
 
-			// Calculate the new row based on time
+				// Calculate the new row based on time
 
-			// This is the main use of the Distance function
-			d := scorer.Distance(*config.Rate, note.Time, duration)
+				// This is the main use of the Distance function
+				d := scorer.Distance(*config.Rate, note.Time, duration)
 
-			rowOffsetFromHitRow := int64(float64(d) * config.NsToRow)
+				rowOffsetFromHitRow := int64(float64(d) * config.NsToRow)
 
-			// Check if this note will be rendered
-			if rowOffsetFromHitRow > int64(hitRow) {
-				// This is too far in the future and off the top of the screen
-				log.Fatalln("Active note should not be active: top")
-			} else if rowOffsetFromHitRow < -int64(*config.BarOffsetFromBottom) {
-				// This is scrolled past the bottom of the screen
+				// Check if this note will be rendered
+				if rowOffsetFromHitRow > int64(hitRow) {
+					// This is too far in the future and off the top of the screen
+					log.Fatalln("Active note should not be active: top")
+				} else if rowOffsetFromHitRow < -int64(*config.BarOffsetFromBottom) {
+					// This is scrolled past the bottom of the screen
 
-				// Mark the active window to slide forward 1
-				startOffset++
-				// Mark the render loop to clear this note
-				r.Fill(note.Row, col, " ")
-				// TODO: probably do not need this anymore
-				note.Row = math.MaxUint16
-			} else {
-				// This is still an active note
-				renderRow := hitRow - uint16(rowOffsetFromHitRow)
+					// Check to see if the note was missed
+					if note.HitTime == 0 && !note.IsMine {
+						eidx := len(counts) - 1
+						counts[eidx] += 1
+						r.Fill(uint16(18+eidx), sideColData, fmt.Sprintf("%6v", counts[eidx]))
+						r.AddDecoration(col-1, middleRow-1, "\033[1;31m╭", 240)
+						r.AddDecoration(col+1, middleRow-1, "\033[1;31m╮", 240)
+						r.AddDecoration(col-1, middleRow, "\033[1;31m╰", 240)
+						r.AddDecoration(col+1, middleRow, "\033[1;31m╯", 240)
+					}
 
-				// Only if this has changed position do we clear and render anew
-				if note.Row != renderRow && note.HitTime == 0 {
-					// TODO: there might be an optimization here
+					// Mark the active window to slide forward 1
+					startOffset++
+					// Mark the render loop to clear this note
 					r.Fill(note.Row, col, " ")
-					note.Row = renderRow
-					if note.IsMine {
-						r.Fill(note.Row, col, th.RenderMine(col, note.Denom))
-					} else {
-						r.Fill(note.Row, col, th.RenderNote(col, note.Denom))
+					// TODO: probably do not need this anymore
+					note.Row = math.MaxUint16
+				} else {
+					// This is still an active note
+					renderRow := hitRow - uint16(rowOffsetFromHitRow)
+
+					// Only if this has changed position do we clear and render anew
+					if note.Row != renderRow && note.HitTime == 0 {
+						// TODO: there might be an optimization here
+						r.Fill(note.Row, col, " ")
+						note.Row = renderRow
+						if note.IsMine {
+							r.Fill(note.Row, col, th.RenderMine(col, note.Denom))
+						} else {
+							r.Fill(note.Row, col, th.RenderNote(col, note.Denom))
+						}
 					}
+				}
+
+			}
+
+			// At the end of this render loop I want to see which notes will require rendering next frame and slide the window
+			for _, note := range chart.Notes[end:] {
+				d := scorer.Distance(*config.Rate, note.Time, duration)
+				rowOffsetFromHitRow := int64(float64(d) * config.NsToRow)
+
+				// Check if this note will be rendered
+				if rowOffsetFromHitRow < int64(hitRow) {
+					endOffset++
+				} else {
+					break
 				}
 			}
 
-			// Is this row within the playing field?
-			if !note.Miss && note.HitTime == 0 && !note.IsMine && d < -config.Judgements[len(config.Judgements)-2].Time {
-				counts[len(counts)-1] += 1
-				note.Miss = true
-				r.AddDecoration(col-1, middleRow-1, "\033[1;31m╭", 240)
-				r.AddDecoration(col+1, middleRow-1, "\033[1;31m╮", 240)
-				r.AddDecoration(col-1, middleRow, "\033[1;31m╰", 240)
-				r.AddDecoration(col+1, middleRow, "\033[1;31m╯", 240)
+			// Update the sliding window
+			chart.SetActive(start+startOffset, end+endOffset)
+
+			return true
+		},
+		func(renderDuration time.Duration) {
+			totalRenderDuration += uint64(renderDuration)
+			totalFrameCounter++
+			if totalFrameCounter%uint64(*config.DebugUpdateRate) != 0 {
+				return
 			}
-		}
 
-		// At the end of this render loop I want to see which notes will require rendering next frame and slide the window
-		for _, note := range chart.Notes[end:] {
-			d := scorer.Distance(*config.Rate, note.Time, duration)
-			rowOffsetFromHitRow := int64(float64(d) * config.NsToRow)
+			// Print debugging stats
+			active, start, end := chart.Active()
+			r.Fill(2, sideCol, fmt.Sprintf("     Window:  %v - %v (%v)", start, end, len(active)))
+			r.Fill(3, sideColData, strconv.FormatUint(totalRenderDuration/totalFrameCounter, 10)+" ")
+		},
+	)
 
-			// Check if this note will be rendered
-			if rowOffsetFromHitRow < int64(hitRow) {
-				endOffset++
-			} else {
-				break
-			}
-		}
-
-		// Update the sliding window
-		chart.SetActive(start+startOffset, end+endOffset)
-
-		r.Fill(10, sideCol, fmt.Sprintf("   Error dt:  %6v", distanceError))
-		r.Fill(11, sideCol, fmt.Sprintf("      Stdev:  %6.2f", stdev))
-		r.Fill(12, sideCol, fmt.Sprintf("       Mean:  %6.2f", mean))
-		r.Fill(13, sideCol, fmt.Sprintf("      Total:  %6v", chart.NoteCount))
-		r.Fill(14, sideCol, fmt.Sprintf("      Mines:  %6v", chart.MineCount))
-		// r.Fill(15, sideCol, fmt.Sprintf("     Window:  %v - %v (%v)", start, end, len(active)))
-		for i, judgement := range config.Judgements {
-			r.Fill(uint16(18+i), sideCol, fmt.Sprintf("%v:  %6v", judgement.Name, counts[i]))
-		}
-
-		return true
-	})
-
-	if finished {
+	if finished && len(quitChannel) == 0 {
 		scorer.Save(chart, &inputs, *config.Rate)
 		log.Println("saved")
+		_, _ = <-in, <-in
 	}
-	_, _ = <-in, <-in
 	return nil
 }

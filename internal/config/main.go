@@ -14,6 +14,7 @@ import (
 var (
 	Directory           = kingpin.Arg("directory", "Song/chart directory").Required().ExistingDir()
 	CpuProfile          = kingpin.Flag("profile", "Profile CPU").String()
+	DebugUpdateRate     = kingpin.Flag("debug-update-rate", "Every n frames").Default("240").Uint16()
 	Input               = kingpin.Flag("input", "Input device").Default("/dev/input/by-id/usb-OLKB_Planck-event-kbd").Short('i').ExistingFile()
 	Rate                = kingpin.Flag("rate", "Playback % rate").Default("100").Short('r').Uint16()
 	Offset              = kingpin.Flag("offset", "Global offset").Default("0ms").Short('o').Duration()
@@ -25,7 +26,7 @@ var (
 	keys4               = kingpin.Flag("keys-single", "Keys for 4k").Default("12,40,17,50").Short('k').String()
 	keys6               = kingpin.Flag("keys-solo", "Keys for 6k").Default("23,18,24,20,31,46").String()
 	keys8               = kingpin.Flag("keys-double", "Keys for 8k").Default("23,18,24,49,35,20,31,46").String()
-	BarOffsetFromBottom              = kingpin.Flag("bar-row", "Console row to render hit bar").Default("8").Uint16()
+	BarOffsetFromBottom = kingpin.Flag("bar-row", "Console row to render hit bar").Default("8").Uint16()
 	BarSym              = kingpin.Flag("bar-decoration", "Decoration at the hitfield").Default("\033[2m\033[1D[ ]").String()
 	NoteSym             = kingpin.Flag("note-symbol", "Restricted to 1 column").Default("⬤").String()
 	MineSym             = kingpin.Flag("mine-symbol", "Restricted to 1 column").Default("⨯").String()
