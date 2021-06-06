@@ -9,9 +9,10 @@ type Note struct {
 	Denom   int   // The beat length, as a denominator, 4 = 1/4 beat
 	IsMine  bool
 	Time    time.Duration // The time the note should be hit
-	TimeEnd time.Duration // TDurationhe time the note should be unhit
+	TimeEnd time.Duration // The time the note should be unhit
 
 	// This is state
-	Row     uint16        // The current row this note is rendered on, for clearing
-	HitTime time.Duration // When the note was hit
+	HitTime     time.Duration // When the note was hit
+	ReleaseTime time.Duration // When the note was released
+	MissTime    time.Duration // When the note was missed
 }

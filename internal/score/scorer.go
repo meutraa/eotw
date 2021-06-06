@@ -3,7 +3,7 @@ package score
 import (
 	"time"
 
-	"git.lost.host/meutraa/eott/internal/game"
+	"git.lost.host/meutraa/eotw/internal/game"
 )
 
 type Scorer interface {

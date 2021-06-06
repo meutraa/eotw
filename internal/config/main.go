@@ -7,38 +7,34 @@ import (
 	"strings"
 	"time"
 
-	"git.lost.host/meutraa/eott/internal/game"
+	"git.lost.host/meutraa/eotw/internal/game"
+	rl "github.com/gen2brain/raylib-go/raylib"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
 	Directory           = kingpin.Arg("directory", "Song/chart directory").Required().ExistingDir()
-	CpuProfile          = kingpin.Flag("profile", "Profile CPU").String()
-	DebugUpdateRate     = kingpin.Flag("debug-update-rate", "Every n frames").Default("240").Uint16()
-	Input               = kingpin.Flag("input", "Input device").Default("/dev/input/by-id/usb-OLKB_Planck-event-kbd").Short('i').ExistingFile()
 	Rate                = kingpin.Flag("rate", "Playback % rate").Default("100").Short('r').Uint16()
 	Offset              = kingpin.Flag("offset", "Global offset").Default("0ms").Short('o').Duration()
 	Delay               = kingpin.Flag("delay", "Start delay").Default("1.5s").Short('d').Duration()
-	ColumnSpacing       = kingpin.Flag("spacing", "Columns between keys").Default("12").Short('S').Uint16()
+	ColumnSpacing       = kingpin.Flag("spacing", "Columns between keys").Default("120").Short('S').Int32()
 	RefreshRate         = kingpin.Flag("refresh-rate", "Monitor refresh rate").Default("240.0").Short('R').Float()
-	FramePeriod         = kingpin.Flag("frame-period", "Render frame period").Default("1ms").Short('p').Duration()
+	NoteRadius          = kingpin.Flag("note-radius", "Radius of notes").Default("14").Float32()
 	scrollSpeedModifier = kingpin.Flag("scroll-speed", "Scroll speed, lower is faster").Default("3").Short('s').Uint()
-	keys4               = kingpin.Flag("keys-single", "Keys for 4k").Default("12,40,17,50").Short('k').String()
+	keys4               = kingpin.Flag("keys-single", "Keys for 4k").Default("73,69,83,67").Short('k').String()
 	keys6               = kingpin.Flag("keys-solo", "Keys for 6k").Default("23,18,24,20,31,46").String()
 	keys8               = kingpin.Flag("keys-double", "Keys for 8k").Default("23,18,24,49,35,20,31,46").String()
-	BarOffsetFromBottom = kingpin.Flag("bar-row", "Console row to render hit bar").Default("8").Uint16()
+	BarOffsetFromBottom = kingpin.Flag("bar-row", "Pixels from bottom to render hit bar").Default("220").Int32()
 	BarSym              = kingpin.Flag("bar-decoration", "Decoration at the hitfield").Default("\033[2m\033[1D[ ]").String()
-	NoteSym             = kingpin.Flag("note-symbol", "Restricted to 1 column").Default("⬤").String()
-	MineSym             = kingpin.Flag("mine-symbol", "Restricted to 1 column").Default("⨯").String()
 
-	Keys4      [4]uint16
-	Keys6      [6]uint16
-	Keys8      [8]uint16
-	NsToRow    float64
-	Judgements []game.Judgement
+	Keys4       [4]int32
+	Keys6       [6]int32
+	Keys8       [8]int32
+	PixelsPerNs float64
+	Judgements  []game.Judgement
 )
 
-func Keys(nKeys uint8) []uint16 {
+func Keys(nKeys uint8) []int32 {
 	switch nKeys {
 	case 4:
 		return Keys4[:]
@@ -50,13 +46,13 @@ func Keys(nKeys uint8) []uint16 {
 	return Keys4[:]
 }
 
-func KeyColumn(r uint16, nKeys uint8) (uint8, error) {
+func KeyColumn(r int32, nKeys uint8) (uint8, error) {
 	for i, c := range Keys(nKeys) {
 		if r == c {
 			return uint8(i), nil
 		}
 	}
-	return 0, errors.New("Key not mapped to index")
+	return 0, errors.New("key not mapped to index")
 }
 
 func Init() {
@@ -65,21 +61,42 @@ func Init() {
 
 	keys := strings.Split(*keys4, ",")
 	for i, key := range keys {
-		p, err := strconv.ParseUint(key, 10, 16)
+		p, err := strconv.ParseInt(key, 10, 32)
 		if nil != err {
 			log.Fatalln(err)
 		}
-		Keys4[i] = uint16(p)
+		Keys4[i] = int32(p)
 	}
 
-	NsToRow = 1 / (float64(*scrollSpeedModifier) * 1000 / *RefreshRate * 1000000)
+	PixelsPerNs = 1 / (float64(*scrollSpeedModifier) * 40 / *RefreshRate * 1000000)
 	Judgements = []game.Judgement{
-		{Time: 11 * time.Millisecond, Name: "      \033[1;31mE\033[38;5;208mx\033[1;33ma\033[1;32mc\033[38;5;153mt\033[0m"},
-		{Time: 22 * time.Millisecond, Name: "  \033[38;5;141mMarvelous\033[0m"},
-		{Time: 45 * time.Millisecond, Name: "    \033[38;5;117mPerfect\033[0m"},
-		{Time: 90 * time.Millisecond, Name: "      \033[38;5;155mGreat\033[0m"},
-		{Time: 135 * time.Millisecond, Name: "       \033[38;5;214mGood\033[0m"},
-		{Time: 180 * time.Millisecond, Name: "        \033[38;5;208mBoo\033[0m"},
-		{Time: -1, Name: "       \033[38;5;160mMiss\033[0m"},
+		{Time: 11 * time.Millisecond,
+			Name:  "      Exact",
+			Color: rl.NewColor(63, 0, 255, 255),
+		},
+		{Time: 22 * time.Millisecond,
+			Name:  "  Marvelous",
+			Color: rl.NewColor(175, 135, 255, 255),
+		},
+		{Time: 45 * time.Millisecond,
+			Name:  "    Perfect",
+			Color: rl.NewColor(135, 215, 255, 255),
+		},
+		{Time: 90 * time.Millisecond,
+			Name:  "      Great",
+			Color: rl.NewColor(175, 255, 95, 255),
+		},
+		{Time: 135 * time.Millisecond,
+			Name:  "       Good",
+			Color: rl.NewColor(255, 175, 0, 255),
+		},
+		{Time: 180 * time.Millisecond,
+			Name:  "        Boo",
+			Color: rl.NewColor(255, 135, 0, 255),
+		},
+		{Time: -1,
+			Name:  "       Miss",
+			Color: rl.NewColor(215, 0, 0, 255),
+		},
 	}
 }

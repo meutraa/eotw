@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"git.lost.host/meutraa/eott/internal/config"
-	"git.lost.host/meutraa/eott/internal/game"
-	"git.lost.host/meutraa/eott/internal/testdata"
+	"git.lost.host/meutraa/eotw/internal/config"
+	"git.lost.host/meutraa/eotw/internal/game"
+	"git.lost.host/meutraa/eotw/internal/testdata"
 )
 
 var hitTests = map[game.Input](*game.Note){

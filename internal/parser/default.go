@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"git.lost.host/meutraa/eott/internal/game"
+	"git.lost.host/meutraa/eotw/internal/game"
 )
 
 type DefaultParser struct{}
@@ -40,7 +40,7 @@ func (p *DefaultParser) getSecondsPerNote(rates []game.BPM, currentBeat float64,
 
 func (p *DefaultParser) mapToNote(ch byte) bool {
 	t := string(ch)
-	return t == "1" || t == "2" || t == "M"
+	return t == "1" || t == "2" || t == "4" || t == "M"
 }
 
 func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
@@ -115,6 +115,7 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 
 		notes := []*game.Note{}
 		mineCount := 0
+		holdCount := 0
 		noteCount := 0
 
 		blocks := strings.Split(difficulty.Section, "\n,")
@@ -146,6 +147,8 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 					// log.Printf("(%v) %v/%v = %v%vth\033[0m", bpm, i, lineCount, (denom), denom)
 					if c == "M" {
 						mineCount++
+					} else if c == "2" || c == "4" {
+						holdCount++
 					} else {
 						noteCount++
 					}
@@ -160,6 +163,21 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 				for i, c := range chs {
 					if p.mapToNote(c) {
 						notes = append(notes, createNote(uint8(i), string(c)))
+					} else if c == '3' {
+						// This is a release note of a previous head
+						// Find the last note of type head in this column and
+						// add this as the endtime to it
+						// Loop through notes in reverse
+						for j := len(notes) - 1; j >= 0; j-- {
+							note := notes[j]
+							if int(note.Index) != i {
+								continue
+							}
+
+							// This will be the matching note
+							note.TimeEnd = time.Duration(seconds * 1000 * 1000 * 1000)
+							break
+						}
 					}
 				}
 
@@ -171,6 +189,7 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 		charts = append(charts, &game.Chart{
 			Notes:      notes,
 			NoteCount:  int64(noteCount),
+			HoldCount:  int64(holdCount),
 			MineCount:  int64(mineCount),
 			Difficulty: difficulty,
 		})

@@ -1,28 +1,10 @@
 package theme
 
 import (
-	"fmt"
-
 	"image/color"
-
-	"git.lost.host/meutraa/eott/internal/config"
 )
 
 type DefaultTheme struct {
-}
-
-func (t *DefaultTheme) RenderMine(column uint16, denom int) string {
-	r, g, b := getNoteColor(1)
-	return fmt.Sprintf("\033[38;2;%v;%v;%vm%v\033[0m", r, g, b, *config.MineSym)
-}
-
-func (t *DefaultTheme) RenderNote(column uint16, denom int) string {
-	r, g, b := getNoteColor(denom)
-	return fmt.Sprintf("\033[38;2;%v;%v;%vm%v\033[0m", r, g, b, *config.NoteSym)
-}
-
-func (t *DefaultTheme) RenderHitField(index uint8) string {
-	return *config.BarSym
 }
 
 var (
@@ -44,7 +26,7 @@ var (
 	}
 )
 
-func getNoteColor(d int) (r, g, b uint8) {
+func (t *DefaultTheme) GetNoteColor(d int) (r, g, b uint8) {
 	col, ok := noteColors[d]
 	if !ok {
 		col = noteColors[-1]

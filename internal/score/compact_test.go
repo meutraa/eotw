@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"git.lost.host/meutraa/eott/internal/game"
+	"git.lost.host/meutraa/eotw/internal/game"
 )
 
 var compactTests = map[*([]game.Input)]([]InputsCompact){

@@ -8,8 +8,8 @@ import (
 	"log"
 	"time"
 
-	"git.lost.host/meutraa/eott/internal/config"
-	"git.lost.host/meutraa/eott/internal/game"
+	"git.lost.host/meutraa/eotw/internal/config"
+	"git.lost.host/meutraa/eotw/internal/game"
 	_ "github.com/mattn/go-sqlite3"
 )
 

@@ -3,7 +3,7 @@ package testdata
 import (
 	"encoding/json"
 
-	"git.lost.host/meutraa/eott/internal/game"
+	"git.lost.host/meutraa/eotw/internal/game"
 )
 
 func GetChart() (*game.Chart, error) {
