@@ -150,7 +150,7 @@ func (s *DefaultScorer) ApplyHistoryToChart(ch *game.Chart, history *History) *g
 	}
 	chart := game.Chart{
 		Notes:      nn,
-		NoteCount:  ch.NoteCount,
+		NoteCounts: ch.NoteCounts,
 		MineCount:  ch.MineCount,
 		Difficulty: ch.Difficulty,
 	}

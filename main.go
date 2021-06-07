@@ -50,11 +50,6 @@ func run() error {
 	rl.SetTargetFPS(int32(*config.RefreshRate))
 
 	program := Program{}
-	for !rl.IsWindowReady() {
-		log.Println("Waiting on window")
-		time.Sleep(time.Millisecond * 5)
-	}
-
 	if err := program.Init(); nil != err {
 		return err
 	}
@@ -79,10 +74,14 @@ func run() error {
 		if rl.IsWindowResized() {
 			program.Resize()
 		}
-		duration := time.Since(program.startTime)
 
+		duration := time.Since(program.startTime)
 		program.Update(duration)
 		program.Render(duration)
+
+		if rl.GetMusicTimePlayed(music) >= program.musicLength {
+			break
+		}
 	}
 
 	program.Scorer.Save(&program.chart, &program.inputs, *config.Rate)

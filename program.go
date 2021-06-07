@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"git.lost.host/meutraa/eotw/internal/config"
@@ -35,6 +36,7 @@ type Program struct {
 	Parser *parser.DefaultParser
 	Scorer *score.DefaultScorer
 	Theme  *theme.DefaultTheme
+	Font   rl.Font
 
 	startTime time.Time
 
@@ -63,7 +65,6 @@ type Program struct {
 }
 
 func (p *Program) Resize() {
-	log.Println(rl.GetScreenHeight(), rl.GetScreenWidth())
 	p.width = int32(rl.GetScreenWidth())
 	p.height = int32(rl.GetScreenHeight())
 	p.middle = Position{X: p.width / 2, Y: p.height / 2}
@@ -80,6 +81,7 @@ func (g *Program) Init() error {
 	g.Parser = &parser.DefaultParser{}
 	g.Scorer = &score.DefaultScorer{}
 	g.Theme = &theme.DefaultTheme{}
+	g.Font = rl.LoadFont("assets/fonts/Inconsolata-Regular.ttf")
 
 	if err := filepath.Walk(*config.Directory, func(p string, info os.FileInfo, err error) error {
 		switch path.Ext(info.Name()) {
@@ -141,7 +143,6 @@ func (p *Program) Update(duration time.Duration) {
 			p.decorations = append(p.decorations, &Decoration{
 				frames: 24,
 				key:    key,
-				note:   note,
 				startCounting: func(note *game.Note, key int32) bool {
 					return rl.IsKeyReleased(key)
 				},
@@ -159,6 +160,7 @@ func (p *Program) Update(duration time.Duration) {
 		p.sumOfDistance += distance
 		// because distance is < missDistance, this should never be nil
 		idx, judgement := judge(abs)
+		note.Judgement = judgement
 
 		p.decorations = append(p.decorations, &Decoration{
 			frames: 24,
@@ -223,14 +225,42 @@ func (p *Program) Render(duration time.Duration) {
 	rl.BeginDrawing()
 	rl.ClearBackground(rl.Black)
 
-	p.RenderBackgroundDecoration()
+	p.RenderBackgroundDecoration(duration)
 	p.RenderStatic()
 	p.RenderGame(duration)
 
 	rl.EndDrawing()
 }
 
-func (p *Program) RenderBackgroundDecoration() {
+func (p *Program) RenderBackgroundDecoration(duration time.Duration) {
+	measures, start, end := p.chart.ActiveMeasures()
+	for _, m := range measures {
+		// Can create a sliding window for these in the future
+		d := p.Scorer.Distance(*config.Rate, m.Time, duration)
+
+		if d < -config.Judgements[len(config.Judgements)-2].Time {
+			start++
+			continue
+		}
+
+		y := p.hitRow - int32(pixelsFromHitbar(d))
+
+		rl.DrawLine(0, y, p.width, y, theme.MeasureColors[m.Denom])
+	}
+
+	for _, measure := range p.chart.Measures[end:] {
+		d := p.Scorer.Distance(*config.Rate, measure.Time, duration)
+
+		// Check if this note will be rendered
+		if pixelsFromHitbar(d) < int64(p.hitRow) {
+			end++
+		} else {
+			break
+		}
+	}
+
+	p.chart.SetActiveMeasures(start, end)
+
 	// This might get big, but I think it is really fast
 	for _, dec := range p.decorations {
 		if dec.frames > 0 {
@@ -254,8 +284,6 @@ func (p *Program) RenderGame(duration time.Duration) {
 	// The first time this is called, the active slice is empty
 	// and start, end = 0, 0
 	active, start, end := p.chart.Active()
-	startOffset := 0
-	endOffset := 0
 
 	// Render notes
 	for _, note := range active {
@@ -298,10 +326,10 @@ func (p *Program) RenderGame(duration time.Duration) {
 			if active[0].TimeEnd != 0 {
 				de := p.Scorer.Distance(*config.Rate, note.TimeEnd, duration)
 				if de < -worst.Time {
-					startOffset++
+					start++
 				} // else holding window because end of hold note still active
 			} else {
-				startOffset++
+				start++
 			}
 		}
 
@@ -335,8 +363,6 @@ func (p *Program) RenderGame(duration time.Duration) {
 						dsh := p.Scorer.Distance(*config.Rate, note.HitTime, duration)
 						psh := pixelsFromHitbar(dsh)
 
-						_, judgement := judge(time.Duration(math.Abs(float64(note.Time - note.HitTime))))
-
 						if note.ReleaseTime != 0 {
 							deh := p.Scorer.Distance(*config.Rate, note.ReleaseTime, duration)
 							peh := pixelsFromHitbar(deh)
@@ -347,9 +373,9 @@ func (p *Program) RenderGame(duration time.Duration) {
 									X:      float32(col) - *config.NoteRadius + 2,
 									Y:      float32(yeh) - *config.NoteRadius + 2,
 									Width:  *config.NoteRadius*2 - 4,
-									Height: float32(peh-psh) - 4,
+									Height: float32(peh-psh) - 4 + *config.NoteRadius*2,
 								},
-								1, 1, judgement.Color,
+								1, 1, note.Judgement.Color,
 							)
 						} else {
 							yaeh := p.hitRow
@@ -361,9 +387,9 @@ func (p *Program) RenderGame(duration time.Duration) {
 									X:      float32(col) - *config.NoteRadius + 2,
 									Y:      float32(yaeh) - *config.NoteRadius + 2,
 									Width:  *config.NoteRadius*2 - 4,
-									Height: float32(-psh) - 4,
+									Height: float32(-psh) - 4 + *config.NoteRadius*2,
 								},
-								1, 1, judgement.Color,
+								1, 1, note.Judgement.Color,
 							)
 							// fill from hit time to current time
 						}
@@ -373,7 +399,7 @@ func (p *Program) RenderGame(duration time.Duration) {
 							X:      float32(col) - *config.NoteRadius,
 							Y:      float32(ye) - *config.NoteRadius,
 							Width:  *config.NoteRadius * 2,
-							Height: float32(pe - ps),
+							Height: float32(pe-ps) + *config.NoteRadius*2,
 						},
 						1, 1, 2, color,
 					)
@@ -392,14 +418,14 @@ func (p *Program) RenderGame(duration time.Duration) {
 
 		// Check if this note will be rendered
 		if pixelsFromHitbar(d) < int64(p.hitRow) {
-			endOffset++
+			end++
 		} else {
 			break
 		}
 	}
 
 	// Update the sliding window
-	p.chart.SetActive(start+startOffset, end+endOffset)
+	p.chart.SetActive(start, end)
 }
 
 func (p *Program) RenderStatic() {
@@ -417,16 +443,26 @@ func (p *Program) RenderStatic() {
 
 	rl.DrawRectangle(0, 2, int32(float32(p.width)*(rl.GetMusicTimePlayed(*p.music)/p.musicLength)), 2, rl.White)
 
+	text := func(row float32, color rl.Color, template string, args ...interface{}) {
+		rl.DrawTextEx(p.Font,
+			fmt.Sprintf(template, args...),
+			rl.Vector2{X: float32(p.sideCol), Y: row * 24},
+			24, 1, color,
+		)
+	}
+
 	// Render the static stat ui
 	rl.DrawFPS(p.sideCol, 3*24)
 	notes, start, end := p.chart.Active()
-	rl.DrawText(fmt.Sprintf(" Active Window [%v - %v] (%v)", start, end, len(notes)), p.sideCol, 4*24, 20, rl.White)
-	rl.DrawText(fmt.Sprintf("   Error dt: %6.0f ms", float64(p.distanceError)/float64(time.Millisecond)), p.sideCol, 10*24, 20, rl.White)
-	rl.DrawText(fmt.Sprintf("      Stdev: %6.2f ms", p.stdev/float64(time.Millisecond)), p.sideCol, 11*24, 20, rl.White)
-	rl.DrawText(fmt.Sprintf("       Mean: %6.2f ms", p.mean/float64(time.Millisecond)), p.sideCol, 12*24, 20, rl.White)
-	rl.DrawText(fmt.Sprintf("      Notes:  %6v", p.chart.NoteCount), p.sideCol, 13*24, 20, rl.White)
-	rl.DrawText(fmt.Sprintf("      Holds:  %6v", p.chart.HoldCount), p.sideCol, 14*24, 20, rl.White)
-	rl.DrawText(fmt.Sprintf("      Mines:  %6v", p.chart.MineCount), p.sideCol, 15*24, 20, rl.White)
+	measures, ms, me := p.chart.ActiveMeasures()
+	text(4, rl.White, " Active Window [%v - %v] (%v)", start, end, len(notes))
+	text(5, rl.White, " Measure Window [%v - %v] (%v)", ms, me, len(measures))
+	text(10, rl.White, "   Error dt: %6.0f ms", float64(p.distanceError)/float64(time.Millisecond))
+	text(11, rl.White, "      Stdev: %6.2f ms", p.stdev/float64(time.Millisecond))
+	text(12, rl.White, "       Mean: %6.2f ms", p.mean/float64(time.Millisecond))
+	text(13, rl.White, "      Notes: %4v", strings.Join(p.chart.NoteCountsAsStrings, ", "))
+	text(14, rl.White, "      Holds: %4v", p.chart.HoldCount)
+	text(15, rl.White, "      Mines: %4v", p.chart.MineCount)
 	sh := int32(float32(p.middle.Y) * 1.2)
 	for i, j := range config.Judgements {
 		if i < len(config.Judgements)-1 {
@@ -437,6 +473,6 @@ func (p *Program) RenderStatic() {
 			rl.DrawLine(os, sh+5, os, sh+10, col)
 			rl.DrawLine(osp, sh+5, osp, sh+10, col)
 		}
-		rl.DrawText(fmt.Sprintf("%s: %6v", j.Name, p.counts[i]), p.sideCol, int32(24*(18+i)), 20, j.Color)
+		text(18+float32(i), j.Color, "%s: %4v", j.Name, p.counts[i])
 	}
 }

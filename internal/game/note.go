@@ -13,6 +13,7 @@ type Note struct {
 
 	// This is state
 	HitTime     time.Duration // When the note was hit
+	Judgement   *Judgement
 	ReleaseTime time.Duration // When the note was released
 	MissTime    time.Duration // When the note was missed
 }

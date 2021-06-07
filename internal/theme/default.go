@@ -2,12 +2,18 @@ package theme
 
 import (
 	"image/color"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 type DefaultTheme struct {
 }
 
 var (
+	MeasureColors = map[int]rl.Color{
+		1: rl.White,    // 1
+		4: rl.DarkGray, // 1/4
+	}
 	noteColors = map[int]color.RGBA{
 		1:  {R: 236, G: 30, B: 0},    // 1/4 red
 		2:  {R: 0, G: 118, B: 236},   // 1/8 blue

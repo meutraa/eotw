@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"strconv"
@@ -104,9 +103,6 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 		}
 	}
 
-	fmt.Printf("Offset: %v\n", offset)
-	fmt.Printf("  BPMs: %v\n\n", bpms)
-
 	charts := []*game.Chart{}
 	for _, difficulty := range difficulties {
 		// Start time of first note
@@ -116,10 +112,17 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 		notes := []*game.Note{}
 		mineCount := 0
 		holdCount := 0
-		noteCount := 0
+		noteCounts := make([]int64, difficulty.NKeys)
 
 		blocks := strings.Split(difficulty.Section, "\n,")
+		measureTimes := []*game.Measure{}
+
 		for _, block := range blocks {
+			measureTimes = append(measureTimes, &game.Measure{
+				Denom: 1,
+				Time:  time.Duration(seconds * 1000 * 1000 * 1000),
+			})
+
 			lines := []string{}
 			bls := strings.Split(block, "\n")
 			for _, l := range bls {
@@ -141,28 +144,38 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 				chs := []byte(line)
 				r := big.NewRat(int64(i*4), lineCount)
 				denom := r.Denom().Int64()
+				if denom == 1 && i != 0 {
+					measureTimes = append(measureTimes, &game.Measure{
+						Denom: 4,
+						Time:  time.Duration(seconds * 1000 * 1000 * 1000),
+					})
+				}
 				_, secondsPerNote := p.getSecondsPerNote(bpms, currentBeat, beatsPerNote)
 
-				createNote := func(index uint8, c string) *game.Note {
+				createNote := func(index uint8, c byte) *game.Note {
 					// log.Printf("(%v) %v/%v = %v%vth\033[0m", bpm, i, lineCount, (denom), denom)
-					if c == "M" {
+					if c == 'M' {
 						mineCount++
-					} else if c == "2" || c == "4" {
+					} else if c == '2' || c == '4' {
 						holdCount++
-					} else {
-						noteCount++
 					}
 					return &game.Note{
 						Index:  index,
 						Denom:  int(denom),
-						IsMine: c == "M",
+						IsMine: c == 'M',
 						Time:   time.Duration(seconds * 1000 * 1000 * 1000),
 					}
 				}
 
+				hitCount := 0
 				for i, c := range chs {
+					// Positive hits at the same time
+					if c == '1' || c == '2' || c == '4' {
+						hitCount++
+					}
+
 					if p.mapToNote(c) {
-						notes = append(notes, createNote(uint8(i), string(c)))
+						notes = append(notes, createNote(uint8(i), c))
 					} else if c == '3' {
 						// This is a release note of a previous head
 						// Find the last note of type head in this column and
@@ -181,17 +194,28 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 					}
 				}
 
+				if hitCount > 0 {
+					noteCounts[hitCount-1] += 1
+				}
+
 				seconds += secondsPerNote
 				currentBeat += beatsPerNote
 			}
 		}
 
+		noteCountsAsStrings := make([]string, difficulty.NKeys)
+		for i, count := range noteCounts {
+			noteCountsAsStrings[i] = strconv.FormatInt(count, 10)
+		}
+
 		charts = append(charts, &game.Chart{
-			Notes:      notes,
-			NoteCount:  int64(noteCount),
-			HoldCount:  int64(holdCount),
-			MineCount:  int64(mineCount),
-			Difficulty: difficulty,
+			Notes:               notes,
+			Measures:            measureTimes,
+			NoteCounts:          noteCounts,
+			NoteCountsAsStrings: noteCountsAsStrings,
+			HoldCount:           int64(holdCount),
+			MineCount:           int64(mineCount),
+			Difficulty:          difficulty,
 		})
 	}
 
