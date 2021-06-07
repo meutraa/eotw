@@ -81,7 +81,7 @@ func (g *Program) Init() error {
 	g.Parser = &parser.DefaultParser{}
 	g.Scorer = &score.DefaultScorer{}
 	g.Theme = &theme.DefaultTheme{}
-	g.Font = rl.LoadFont("assets/fonts/Inconsolata-Regular.ttf")
+	g.Font = rl.LoadFontEx("assets/fonts/Inconsolata-Regular.ttf", *config.FontSize, nil, 0)
 
 	if err := filepath.Walk(*config.Directory, func(p string, info os.FileInfo, err error) error {
 		switch path.Ext(info.Name()) {
@@ -149,7 +149,7 @@ func (p *Program) Update(duration time.Duration) {
 				render: func(remaining int) {
 					g := rl.Gray
 					g.A = uint8(float32(255) * (float32(remaining) / 24))
-					rl.DrawCircle(col, p.hitRow, *config.NoteRadius-4, g)
+					rl.DrawCircleGradient(col, p.hitRow, *config.NoteRadius, g, rl.Black)
 				},
 			})
 			continue
@@ -176,11 +176,11 @@ func (p *Program) Update(duration time.Duration) {
 			},
 			render: func(remaining int) {
 				g := judgement.Color
-				gr := rl.Gray
+				gr := g
 				gr.A = uint8(float32(255) * (float32(remaining) / 24))
-				rl.DrawCircle(col, p.hitRow, *config.NoteRadius, g)
-				rl.DrawCircle(col, p.hitRow, *config.NoteRadius-2, rl.Black)
-				rl.DrawCircle(col, p.hitRow, *config.NoteRadius-4, gr)
+				rl.DrawCircle(col, p.hitRow, *config.NoteRadius+4, g)
+				rl.DrawCircle(col, p.hitRow, *config.NoteRadius, rl.Black)
+				rl.DrawCircleGradient(col, p.hitRow, *config.NoteRadius, g, rl.Black)
 			},
 		})
 
@@ -436,7 +436,7 @@ func (p *Program) RenderStatic() {
 		rl.DrawCircleLines(
 			getColumn(p.chart.Difficulty.NKeys, p.middle.X, i),
 			p.hitRow,
-			*config.NoteRadius+4,
+			*config.NoteRadius+4.05,
 			g,
 		)
 	}
@@ -446,8 +446,8 @@ func (p *Program) RenderStatic() {
 	text := func(row float32, color rl.Color, template string, args ...interface{}) {
 		rl.DrawTextEx(p.Font,
 			fmt.Sprintf(template, args...),
-			rl.Vector2{X: float32(p.sideCol), Y: row * 24},
-			24, 1, color,
+			rl.Vector2{X: float32(p.sideCol), Y: row * float32(*config.FontSize)},
+			float32(*config.FontSize), 1, color,
 		)
 	}
 

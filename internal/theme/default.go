@@ -11,8 +11,9 @@ type DefaultTheme struct {
 
 var (
 	MeasureColors = map[int]rl.Color{
-		1: rl.White,    // 1
-		4: rl.DarkGray, // 1/4
+		1: rl.NewColor(128, 128, 128, 255), // 1
+		4: rl.NewColor(48, 48, 48, 255),    // 1/4
+		8: rl.NewColor(24, 24, 24, 255),    // 1/8
 	}
 	noteColors = map[int]color.RGBA{
 		1:  {R: 236, G: 30, B: 0},    // 1/4 red

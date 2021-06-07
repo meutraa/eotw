@@ -150,6 +150,12 @@ func (p *DefaultParser) Parse(file string) ([]*game.Chart, error) {
 						Time:  time.Duration(seconds * 1000 * 1000 * 1000),
 					})
 				}
+				if denom == 2 || denom == 4 {
+					measureTimes = append(measureTimes, &game.Measure{
+						Denom: 8,
+						Time:  time.Duration(seconds * 1000 * 1000 * 1000),
+					})
+				}
 				_, secondsPerNote := p.getSecondsPerNote(bpms, currentBeat, beatsPerNote)
 
 				createNote := func(index uint8, c byte) *game.Note {

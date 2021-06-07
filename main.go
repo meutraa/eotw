@@ -54,6 +54,11 @@ func run() error {
 		return err
 	}
 
+	im := rl.GenImageColor(20, 20, rl.White)
+	tex := rl.LoadTextureFromImage(im)
+	rl.SetTextureFilter(tex, rl.FilterAnisotropic16x)
+	rl.SetShapesTexture(tex, rl.Rectangle{Width: 20, Height: 20})
+
 	music := rl.LoadMusicStream(program.audioFile)
 	music.Looping = false
 	defer rl.UnloadMusicStream(music)
